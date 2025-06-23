@@ -1,5 +1,7 @@
+mod board;
+
+use board::ChessBoardState;
 fn main() {
-    println!("Hello, world!");
-    let guess = "dfsdf";
-    print!("sdfsd {}", guess);
+    let board = ChessBoardState::new();
+    board.debug_print();
 }
