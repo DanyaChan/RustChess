@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-use crate::game::board;
-
 // TODO REMOVE
 use super::board::*;
 
@@ -63,6 +60,7 @@ impl ChessBoardState {
         self.count_move(pawn_move, capture);
 
         self.board[to] = self.board[from];
+        self.board[from] = ChessPiece::None;
         if pawn_move && mv.from.y == 1 && mv.to.y == 3 {
             self.en_passant = Pos { x: mv.from.x, y: 2 }.get_code();
         }
@@ -111,6 +109,7 @@ impl ChessBoardState {
         }
 
         self.board[to] = self.board[from];
+        self.board[from] = ChessPiece::None;
         self.make_simple_move_force(mv);
     }
 
@@ -190,7 +189,8 @@ impl ChessBoardState {
     }
 
     pub fn get_king_attacked(&self, color: Color) -> bool {
-        return false;
+        let pos = self.get_king_pos(color);
+        return self.get_pos_attacked(pos, color);
     }
 
     // when cheking if smth is attacked color always means who is attacked
@@ -212,7 +212,7 @@ impl ChessBoardState {
             let piece = self.get_piece_unsafe(to);
             if pieces.contains(&piece) {
                 return true;
-            } else if (piece != ChessPiece::None) {
+            } else if piece != ChessPiece::None {
                 return false;
             }
             x += step_x;
@@ -309,9 +309,9 @@ impl ChessBoardState {
                 self.add_knight_moves(from, &mut res)
             }
             ChessPiece::BishopBlack | ChessPiece::BishopWhite => {
-                self.add_knight_moves(from, &mut res)
+                self.add_bishop_moves(from, &mut res)
             }
-            ChessPiece::QueenBlack | ChessPiece::QueenWhite => self.add_pawn_moves(from, &mut res),
+            ChessPiece::QueenBlack | ChessPiece::QueenWhite => self.add_queen_moves(from, &mut res),
             ChessPiece::KingBlack | ChessPiece::KingWhite => self.add_king_moves(from, &mut res),
             ChessPiece::PawnBlack | ChessPiece::PawnWhite => self.add_pawn_moves(from, &mut res),
         }
@@ -338,8 +338,10 @@ impl ChessBoardState {
         self.add_moves_in_direction(from, -1, -2, 1, res);
     }
     fn add_bishop_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
-        self.add_moves_in_direction(from, -1, 1, 8, res);
+        self.add_moves_in_direction(from, 1, 1, 8, res);
         self.add_moves_in_direction(from, -1, -1, 8, res);
+        self.add_moves_in_direction(from, -1, 1, 8, res);
+        self.add_moves_in_direction(from, 1, -1, 8, res);
     }
     fn add_queen_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
         self.add_bishop_moves(from, res);
@@ -350,15 +352,22 @@ impl ChessBoardState {
         if self.get_piece_coords_i8_unsafe(from.x as i8 + dir, from.y as i8) != ChessPiece::None {
             return false;
         }
-        if self.get_piece_coords_i8_unsafe(from.x as i8 + 2 * dir, from.y as i8) != ChessPiece::None {
+        if self.get_piece_coords_i8_unsafe(from.x as i8 + 2 * dir, from.y as i8) != ChessPiece::None
+        {
             return false;
         }
-        if dir == -1 && self.get_piece_coords_i8_unsafe(from.x as i8 + 3 * dir, from.y as i8) != ChessPiece::None {
+        if dir == -1
+            && self.get_piece_coords_i8_unsafe(from.x as i8 + 3 * dir, from.y as i8)
+                != ChessPiece::None
+        {
             return false;
         }
-        if self.get_pos_attacked(Pos::new_from_coords(from.x as i8 + dir, from.y as i8), self.get_piece_unsafe(from).get_color().unwrap()) {
-
-        } 
+        if self.get_pos_attacked(
+            Pos::new_from_coords(from.x as i8 + dir, from.y as i8),
+            self.get_piece_unsafe(from).get_color().unwrap(),
+        ) {
+            return false;
+        }
 
         return true;
     }
@@ -436,6 +445,7 @@ impl ChessBoardState {
         }
     }
     fn add_pawn_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
+        let mut result = vec![];
         let piece_color = self.get_piece_unsafe(from).get_color().unwrap();
         let y_dir = if piece_color == Color::White { 1 } else { -1 };
 
@@ -447,9 +457,9 @@ impl ChessBoardState {
             1
         };
 
-        self.add_moves_in_direction_general(from, 0, y_dir, step_num, false, false, res);
-        self.add_moves_in_direction_general(from, 1, y_dir, 1, true, true, res);
-        self.add_moves_in_direction_general(from, -1, y_dir, 1, true, true, res);
+        self.add_moves_in_direction_general(from, 0, y_dir, step_num, false, false, &mut result);
+        self.add_moves_in_direction_general(from, 1, y_dir, 1, true, true, &mut result);
+        self.add_moves_in_direction_general(from, -1, y_dir, 1, true, true, &mut result);
 
         let en_passant = Pos::new_from_code(self.en_passant);
 
@@ -463,9 +473,42 @@ impl ChessBoardState {
                 1,
                 false,
                 false,
-                res,
+                &mut result,
             );
-            res.last_mut().unwrap().move_type = ChessMoveType::EnPassant; // костыль мб както подругому
+            if result.len() > 0 {
+                result.last_mut().unwrap().move_type = ChessMoveType::EnPassant;
+                // костыль мб както подругому TODO вернуть сколько ходов добавил
+            }
+        }
+
+        if result.len() > 0 && from.y == 6 {
+            let proms = if piece_color == Color::White {
+                [
+                    ChessPiece::RookWhite,
+                    ChessPiece::QueenWhite,
+                    ChessPiece::BishopWhite,
+                    ChessPiece::KnightWhite,
+                ]
+            } else {
+                [
+                    ChessPiece::RookBlack,
+                    ChessPiece::QueenBlack,
+                    ChessPiece::BishopBlack,
+                    ChessPiece::KnightBlack,
+                ]
+            };
+            for mv in result {
+                for prom_piece in proms {
+                    res.push(ChessMove {
+                        mv: mv.mv,
+                        move_type: ChessMoveType::Promotion(prom_piece),
+                    });
+                }
+            }
+        } else {
+            for mv in result {
+                res.push(mv);
+            }
         }
     }
 
@@ -536,7 +579,7 @@ impl ChessBoardState {
             ChessMoveType::Promotion(x) => {
                 (piece.get_piece_u8().to_ascii_uppercase() as char).to_string()
                     + &mv.mv.get_str()
-                    + &x.get_piece_u8().to_string()
+                    + &(x.get_piece_u8() as char).to_string()
             }
         };
     }
