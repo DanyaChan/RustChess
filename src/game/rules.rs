@@ -12,8 +12,8 @@ pub enum ChessMoveType {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ChessMove {
-    mv: Move,
-    move_type: ChessMoveType,
+    pub mv: Move,
+    pub move_type: ChessMoveType,
 }
 
 impl ChessBoardState {
