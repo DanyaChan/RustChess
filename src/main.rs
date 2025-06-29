@@ -1,14 +1,9 @@
-
+#![deny(warnings)]
 use::rust_chess::game::board::*;
-use::rust_chess::game::rules::*;
-
-fn f(s : String) {
-
-}
+//use::rust_chess::game::rules::*;
 
 fn main() {
-    let board = ChessBoardState::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    let mut board = ChessBoardState::new();
+    board.parse_fen("r1b1kbnr/ppp3p1/2n5/1B1qppPp/3P3N/2N1B3/PPP2P1P/R2QK2R w Kq h6 1 38").unwrap();
     board.debug_print();
-    let v = get_all_moves(board, Pos{x:0, y:0});
-    print!("{}", v.len());
 }

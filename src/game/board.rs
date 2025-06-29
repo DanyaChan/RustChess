@@ -60,11 +60,11 @@ impl Pos {
     pub fn new_from_str(pos_str: &str) -> Self {
         Pos {
             x: match pos_str.bytes().nth(0) {
-                Some(x) => x - 'a' as u8,
+                Some(x) => x - b'a' as u8,
                 None => 0,
             },
             y: match pos_str.bytes().nth(1) {
-                Some(x) => x - '1' as u8,
+                Some(x) => x - b'1' as u8,
                 None => 0,
             },
         }
@@ -72,6 +72,20 @@ impl Pos {
 
     pub fn get_code(&self) -> PosCode {
         (self.x & 0x0F) | (self.y << 4 & 0xF0)
+    }
+
+    pub fn get_str(&self) -> String {
+        if self.x == 0xF && self.y == 0xF {
+            return "-".to_string();
+        }
+        return String::from_utf8([self.x + b'a', self.y + b'1'].to_vec()).unwrap();
+    }
+
+    pub fn new_from_code(code: PosCode) -> Self {
+        return Pos {
+            x: code & 0x0F,
+            y: (code & 0xF0) >> 4,
+        };
     }
 }
 
@@ -167,6 +181,30 @@ Such types for MoveCode, CastleStateFlag are required for less memory use when c
  */
 
 impl ChessBoardState {
+    pub fn get_castle_state_str(&self) -> String {
+
+        if self.castle_state_flags == 0 {
+            return "-".to_string();
+        }
+
+        let mut res = vec![];
+
+        if (&self.castle_state_flags & CastleStateFlag::WhiteShort as u8) != 0 {
+            res.push(b'K');
+        }
+        if (&self.castle_state_flags & CastleStateFlag::BlackShort as u8) != 0 {
+            res.push(b'k');
+        }
+        if (&self.castle_state_flags & CastleStateFlag::WhiteLong as u8) != 0 {
+            res.push(b'Q');
+        }
+        if (&self.castle_state_flags & CastleStateFlag::BlackLong as u8) != 0 {
+            res.push(b'q');
+        }
+
+        return String::from_utf8(res).unwrap();
+    }
+
     pub fn get_piece_unsafe(&self, pos: &Pos) -> ChessPiece {
         return self.board[(pos.y as usize) * BOARD_SIZE + pos.x as usize];
     }
@@ -184,13 +222,13 @@ impl ChessBoardState {
             if i % 8 == 0 {
                 print!("\n");
             }
-            print!("{}", self.board[Self::get_display_idx(i)].get_piece_u8())
+            print!("{}", self.board[Self::get_display_idx(i)].get_piece_u8() as char)
         }
         print!(
-            "\nMove {}, en passant {}, castle {}",
+            "\nMove {}, en passant {}, castle {}\n",
             self.cur_move.get_name(),
-            self.en_passant,
-            self.castle_state_flags
+            Pos::new_from_code(self.en_passant).get_str(),
+            self.get_castle_state_str()
         );
     }
 
@@ -207,8 +245,8 @@ impl ChessBoardState {
 
     pub fn new_from_fen(fen_str: &str) -> Option<Self> {
         let mut res = Self::new();
-        let r = res.load_fen(fen_str);
-        if r == 0 {
+        let r = res.parse_fen(fen_str);
+        if r.is_ok() {
             Some(res)
         } else {
             None
@@ -244,36 +282,24 @@ impl ChessBoardState {
         return 8 * (7 - i / 8) + i % 8;
     }
 
-    // todo result error
-    pub fn load_fen(&mut self, fen_str: &str) -> i8 {
+    pub fn parse_fen(&mut self, fen_str: &str) -> Result<(), String> {
         use scan_fmt::scan_fmt;
-        let board_end = self.parse_board(fen_str);
-        if board_end == usize::MAX {
-            return 1;
+        let parsed_str_opt = scan_fmt!(fen_str, "{}{}{}{}{}{}", String, char, String, String, u8, u16);
+        if parsed_str_opt.is_err() {
+            return Err("Wrong format".to_string());
         }
-        let mut cur_parse = board_end + 1;
-        if cur_parse >= fen_str.len() {
-            return 2;
-        }
-        match Color::new_from_u8(fen_str.bytes().nth(cur_parse).unwrap()) {
+        let parsed_values = parsed_str_opt.unwrap();
+        self.parse_board(&parsed_values.0);
+        match Color::new_from_u8(parsed_values.1 as u8) {
             None => {
-                return 3;
+                return Err("Wrong color".to_string());
             }
             Some(x) => {
                 self.cur_move = x;
             }
         }
-        cur_parse += 2;
-
-        if cur_parse >= fen_str.len() {
-            return 4;
-        }
-
-        for i in cur_parse..cur_parse + 5 {
-            if i == fen_str.len() {
-                return 5;
-            }
-            match fen_str.bytes().nth(i).unwrap() {
+        for i in parsed_values.2.as_bytes() {
+            match i {
                 b'K' => {
                     self.castle_state_flags |= CastleStateFlag::WhiteShort as u8;
                 }
@@ -286,33 +312,22 @@ impl ChessBoardState {
                 b'q' => {
                     self.castle_state_flags |= CastleStateFlag::BlackLong as u8;
                 }
-                _ => {
-                    cur_parse = i + 1;
+                b'-' => {
+                    self.castle_state_flags = 0;
                     break;
+                }
+                _ => {
+                    return Err("Wrong casle format".to_string());
                 }
             }
         }
-        if cur_parse >= fen_str.len() {
-            return 6;
-        }
-        if fen_str.bytes().nth(cur_parse).unwrap() == b'-' {
-            cur_parse += 2;
-        } else {
-            self.en_passant = Pos::new_from_str(&fen_str[cur_parse..cur_parse + 2]).get_code();
-            cur_parse += 3;
-        }
-        if cur_parse >= fen_str.len() {
-            return 7;
+        if parsed_values.3 != "-" {
+            self.en_passant = Pos::new_from_str(&parsed_values.3).get_code();
         }
 
-        let res = scan_fmt!(&fen_str[cur_parse..], "{} {}", u8, u16);
-        if res.is_err() {
-            return 8;
-        }
+        self.cur_move_to_draw = parsed_values.4;
+        self.cur_move_num = parsed_values.5;
 
-        let ok_res = res.unwrap();
-        self.cur_move_num = ok_res.1;
-        self.cur_move_to_draw = ok_res.0;
-        return 0;
+        Ok(())
     }
 }
