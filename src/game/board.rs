@@ -30,7 +30,7 @@ pub enum CastleStateFlag {
     BlackShort = 1 << 3,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Color {
     White,
     Black,
@@ -42,18 +42,20 @@ pub struct Pos {
     pub y: u8,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Move {
     pub from: Pos,
     pub to: Pos,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ChessBoardState {
-    pub cur_move: Color,
+    pub turn: Color,
     pub en_passant: PosCode,
     pub castle_state_flags: u8,
     pub board: [ChessPiece; BOARD_ARRAY_SIZE],
-    pub cur_move_num: u16,
-    pub cur_move_to_draw: u8,
+    pub move_num: u16,
+    pub halfmoves_to_draw: u8,
 }
 
 impl Pos {
@@ -68,6 +70,10 @@ impl Pos {
                 None => 0,
             },
         }
+    }
+
+    pub fn new_from_coords(x: i8, y: i8) -> Self {
+        Pos{x: x as u8, y: y as u8}
     }
 
     pub fn get_code(&self) -> PosCode {
@@ -95,6 +101,10 @@ impl Move {
             from: Pos::new_from_str(&move_str[0..2]),
             to: Pos::new_from_str(&move_str[3..5]),
         }
+    }
+
+    pub fn get_str(&self) -> String {
+        return self.from.get_str() + "-" + &self.to.get_str();
     }
 
     pub fn get_code(&self) -> MoveCode {
@@ -181,6 +191,7 @@ Such types for MoveCode, CastleStateFlag are required for less memory use when c
  */
 
 impl ChessBoardState {
+// utils
     pub fn get_castle_state_str(&self) -> String {
 
         if self.castle_state_flags == 0 {
@@ -205,17 +216,28 @@ impl ChessBoardState {
         return String::from_utf8(res).unwrap();
     }
 
-    pub fn get_piece_unsafe(&self, pos: &Pos) -> ChessPiece {
-        return self.board[(pos.y as usize) * BOARD_SIZE + pos.x as usize];
+    pub fn get_piece_unsafe(&self, pos: Pos) -> ChessPiece {
+        return self.board[Self::get_pos_idx(pos)];
     }
 
-    pub fn get_piece(&self, pos: &Pos) -> Option<ChessPiece> {
+    pub fn get_piece(&self, pos: Pos) -> Option<ChessPiece> {
         if pos.x >= BOARD_SIZE as u8 || pos.y >= BOARD_SIZE as u8 {
             return None;
         }
-        return Some(self.board[(pos.y as usize) * BOARD_SIZE + pos.x as usize]);
+        return Some(self.board[Self::get_pos_idx(pos)]);
     }
 
+    pub fn get_pos_idx(pos: Pos) -> usize {
+        return (pos.y as usize) * BOARD_SIZE + pos.x as usize;
+    }
+
+    pub fn coords_in_bounds(x: i8, y: i8) -> bool {
+        return x < BOARD_SIZE as i8 && y < BOARD_SIZE as i8 && x >= 0 && y >= 0;
+    }
+
+    pub fn pos_in_bounds(pos: Pos) -> bool {
+        return pos.x < BOARD_SIZE as u8 && pos.y < BOARD_SIZE as u8;
+    }
 
     pub fn debug_print(&self) {
         for i in 0..self.board.len() {
@@ -226,7 +248,7 @@ impl ChessBoardState {
         }
         print!(
             "\nMove {}, en passant {}, castle {}\n",
-            self.cur_move.get_name(),
+            self.turn.get_name(),
             Pos::new_from_code(self.en_passant).get_str(),
             self.get_castle_state_str()
         );
@@ -234,12 +256,12 @@ impl ChessBoardState {
 
     pub fn new() -> Self {
         ChessBoardState {
-            cur_move: Color::White,
+            turn: Color::White,
             en_passant: 0xFF,
             castle_state_flags: 0x00,
             board: [ChessPiece::None; BOARD_ARRAY_SIZE],
-            cur_move_num: 1,
-            cur_move_to_draw: 0,
+            move_num: 1,
+            halfmoves_to_draw: 0,
         }
     }
 
@@ -295,7 +317,7 @@ impl ChessBoardState {
                 return Err("Wrong color".to_string());
             }
             Some(x) => {
-                self.cur_move = x;
+                self.turn = x;
             }
         }
         for i in parsed_values.2.as_bytes() {
@@ -325,8 +347,8 @@ impl ChessBoardState {
             self.en_passant = Pos::new_from_str(&parsed_values.3).get_code();
         }
 
-        self.cur_move_to_draw = parsed_values.4;
-        self.cur_move_num = parsed_values.5;
+        self.halfmoves_to_draw = parsed_values.4;
+        self.move_num = parsed_values.5;
 
         Ok(())
     }
