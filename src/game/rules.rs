@@ -69,26 +69,106 @@ impl ChessBoardState {
         self.update_castle_flags(mv);
     }
 
+    fn apply_en_passant(&mut self, mv: Move) {
+        let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
+        let mut pos = Pos::new_from_code(self.en_passant);
+        if color == Color::White { pos.y -= 1; } else {pos.y += 1; }
+        self.board[Self::get_pos_idx(pos)] = ChessPiece::None;
+        self.make_simple_move_force(mv);
+    }
+
+    fn apply_castle(&mut self, mv: Move, move_type: ChessMoveType) {
+        let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
+        let to;
+        let from;
+        match (color, move_type) {
+            (Color::White, ChessMoveType::CastleShort) => {
+                from = Self::get_pos_idx(Pos::new_from_coords(7, 0));
+                to = Self::get_pos_idx(Pos::new_from_coords(5, 0));
+            }
+            (Color::White, ChessMoveType::CastleLong) => {
+                from = Self::get_pos_idx(Pos::new_from_coords(0, 0));
+                to = Self::get_pos_idx(Pos::new_from_coords(3, 0));
+            }
+            (Color::Black, ChessMoveType::CastleShort) => {
+                from = Self::get_pos_idx(Pos::new_from_coords(7, 7));
+                to = Self::get_pos_idx(Pos::new_from_coords(5, 70));
+            }
+            (Color::Black, ChessMoveType::CastleLong) => {
+                from = Self::get_pos_idx(Pos::new_from_coords(0, 7));
+                to = Self::get_pos_idx(Pos::new_from_coords(3, 7));
+            }
+            _ => {
+                panic!("Logic err");
+            }
+        }
+
+        self.board[to] = self.board[from];
+        self.make_simple_move_force(mv);
+    }
+
+    fn apply_promotion(&mut self, mv: Move, promotion: ChessPiece) {
+        self.make_simple_move_force(mv);
+        self.board[Self::get_pos_idx(mv.to)] = promotion; 
+    }
+
+    fn apply_move_force(&mut self, mv: ChessMove) {
+        match mv.move_type {
+            ChessMoveType::Simple => self.make_simple_move_force(mv.mv),
+            ChessMoveType::EnPassant => self.apply_en_passant(mv.mv),
+            ChessMoveType::Promotion(x) => self.apply_promotion(mv.mv, x),
+            ChessMoveType::CastleLong | ChessMoveType::CastleShort => self.apply_castle(mv.mv, mv.move_type),
+        }
+    }
+
+    pub fn get_new_pos_after_move(&self, mv: ChessMove) -> ChessBoardState {
+        let mut new_board = *self;
+        new_board.apply_move_force(mv);
+        return new_board;
+    }
+
     // move check
 
-    // get moves
-
-    pub fn get_all_moves() -> Vec<ChessMove> {
+    // does not exclude moves that leave king open
+    pub fn get_all_moves(&self) -> Vec<ChessMove> {
         vec![]
     }
 
+    // Filter moves that leave king open to attack
     pub fn get_all_moves_checked() -> Vec<ChessMove> {
         vec![]
     }
+
+    pub fn get_all_moves_from_pos_filtered(&self, from: Pos) -> Vec<ChessMove> {
+        vec![]
+    }
+
+    pub fn get_king_attacked(&self, color: Color) -> bool {
+        return false;
+    }
+
+    pub fn get_pos_attacked(&self, color: Color) -> bool {
+        return false;
+    }
+
+    pub fn get_king_pos(&self, color: Color) -> Pos {
+        return Pos { x: 0, y: 0 };
+    }
+
+    // get moves
 
     pub fn get_all_moves_from_pos(&self, from: Pos) -> Vec<ChessMove> {
         let mut res = vec![];
 
         match self.get_piece_unsafe(from) {
-            ChessPiece::None => {},
+            ChessPiece::None => {}
             ChessPiece::RookBlack | ChessPiece::RookWhite => self.add_rook_moves(from, &mut res),
-            ChessPiece::KnightBlack | ChessPiece::KnightWhite => self.add_knight_moves(from, &mut res),
-            ChessPiece::BishopBlack | ChessPiece::BishopWhite => self.add_knight_moves(from, &mut res),
+            ChessPiece::KnightBlack | ChessPiece::KnightWhite => {
+                self.add_knight_moves(from, &mut res)
+            }
+            ChessPiece::BishopBlack | ChessPiece::BishopWhite => {
+                self.add_knight_moves(from, &mut res)
+            }
             ChessPiece::QueenBlack | ChessPiece::QueenWhite => self.add_pawn_moves(from, &mut res),
             ChessPiece::KingBlack | ChessPiece::KingWhite => self.add_king_moves(from, &mut res),
             ChessPiece::PawnBlack | ChessPiece::PawnWhite => self.add_pawn_moves(from, &mut res),
@@ -222,12 +302,20 @@ impl ChessBoardState {
     pub fn get_move_string(&self, mv: ChessMove) -> String {
         let piece = self.get_piece_unsafe(mv.mv.from);
         return match mv.move_type {
-            ChessMoveType::Simple => (piece.get_piece_u8().to_ascii_uppercase() as char).to_string() + &mv.mv.get_str(),
-            ChessMoveType::EnPassant => (piece.get_piece_u8().to_ascii_uppercase() as char).to_string() + &mv.mv.get_str() + "e",
+            ChessMoveType::Simple => {
+                (piece.get_piece_u8().to_ascii_uppercase() as char).to_string() + &mv.mv.get_str()
+            }
+            ChessMoveType::EnPassant => {
+                (piece.get_piece_u8().to_ascii_uppercase() as char).to_string()
+                    + &mv.mv.get_str()
+                    + "e"
+            }
             ChessMoveType::CastleLong => "0-0-0".to_string(),
             ChessMoveType::CastleShort => "0-0".to_string(),
             ChessMoveType::Promotion(x) => {
-                (piece.get_piece_u8().to_ascii_uppercase() as char).to_string() + &mv.mv.get_str() + &x.get_piece_u8().to_string()
+                (piece.get_piece_u8().to_ascii_uppercase() as char).to_string()
+                    + &mv.mv.get_str()
+                    + &x.get_piece_u8().to_string()
             }
         };
     }

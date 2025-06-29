@@ -1,5 +1,4 @@
 use::rust_chess::game::board::*;
-use::rust_chess::game::rules::*;
 
 fn main() {
     let mut board = ChessBoardState::new();

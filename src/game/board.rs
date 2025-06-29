@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub const BOARD_SIZE: usize = 8;
 pub const BOARD_ARRAY_SIZE: usize = BOARD_SIZE * BOARD_SIZE;
 pub type MoveCode = u16; // array of 4 4bit numbers
