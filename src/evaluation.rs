@@ -54,7 +54,8 @@ impl Evaluator {
         };
     }
 
-    pub fn eval(&mut self, board: ChessBoardState, depth: i32, max: bool) -> (ChessMove, f32) {
+    pub fn eval(&mut self, board: ChessBoardState, depth: i32) -> (ChessMove, f32, Vec<String>) {
+        let max = board.turn == Color::White;
         let all_moves = board.get_all_moves();
         if all_moves.len() == 0 {
             return (
@@ -62,7 +63,8 @@ impl Evaluator {
                     mv: Move::new_from_str("a1-a1"),
                     move_type: ChessMoveType::Simple,
                 },
-                if max { -10000000.0 } else { 10000000.0 },
+                if board.turn == Color::Black { 2000.0 } else { -2000.0 },
+                vec![]
             );
         };
 
@@ -70,24 +72,29 @@ impl Evaluator {
             (
                 all_moves[0],
                 self.simple_eval(board.get_new_pos_after_move(all_moves[0])),
+                vec![]
             )
         } else {
-            self.eval(board.get_new_pos_after_move(all_moves[0]), depth - 1, !max)
+            let eval = self.eval(board.get_new_pos_after_move(all_moves[0]), depth - 1);
+            (all_moves[0], eval.1, eval.2)
         };
         for i in 1..all_moves.len() {
             let eval = if depth == 0 {
                 (
                     all_moves[i],
                     self.simple_eval(board.get_new_pos_after_move(all_moves[i])),
+                    vec![]
                 )
             } else {
-                (all_moves[i], self.eval(board.get_new_pos_after_move(all_moves[i]), depth - 1, !max).1)
+                let eval = self.eval(board.get_new_pos_after_move(all_moves[i]), depth - 1);
+                (all_moves[i], eval.1, eval.2)
             };
 
-            if max && eval.1 > best_eval.1 || !max && eval.1 > best_eval.1 {
+            if max && eval.1 > best_eval.1 || !max && eval.1 < best_eval.1 {
                 best_eval = eval;
             }
         }
+        best_eval.2.push(board.get_move_string(best_eval.0) + " " + &best_eval.1.to_string() + " " + &max.to_string());
         return best_eval;
     }
 
