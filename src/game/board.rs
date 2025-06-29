@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::usize; //todo Remove
 pub const BOARD_SIZE: usize = 8;
 pub const BOARD_ARRAY_SIZE: usize = BOARD_SIZE * BOARD_SIZE;
 pub type MoveCode = u16; // array of 4 4bit numbers
@@ -37,15 +36,15 @@ pub enum Color {
     Black,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Pos {
     pub x: u8,
     pub y: u8,
 }
 
 pub struct Move {
-    from: Pos,
-    to: Pos,
+    pub from: Pos,
+    pub to: Pos,
 }
 
 pub struct ChessBoardState {
@@ -90,38 +89,55 @@ impl Move {
 }
 
 impl ChessPiece {
-    pub fn get_piece_char(&self) -> char {
+    pub fn get_piece_u8(&self) -> u8 {
         match *self {
-            ChessPiece::None => '.',
-            ChessPiece::PawnWhite => 'P',
-            ChessPiece::PawnBlack => 'p',
-            ChessPiece::RookWhite => 'R',
-            ChessPiece::RookBlack => 'r',
-            ChessPiece::KnightWhite => 'N',
-            ChessPiece::KnightBlack => 'n',
-            ChessPiece::BishopWhite => 'B',
-            ChessPiece::BishopBlack => 'b',
-            ChessPiece::KingWhite => 'K',
-            ChessPiece::KingBlack => 'k',
-            ChessPiece::QueenWhite => 'Q',
-            ChessPiece::QueenBlack => 'q',
+            ChessPiece::None => b'.',
+            ChessPiece::PawnWhite => b'P',
+            ChessPiece::PawnBlack => b'p',
+            ChessPiece::RookWhite => b'R',
+            ChessPiece::RookBlack => b'r',
+            ChessPiece::KnightWhite => b'N',
+            ChessPiece::KnightBlack => b'n',
+            ChessPiece::BishopWhite => b'B',
+            ChessPiece::BishopBlack => b'b',
+            ChessPiece::KingWhite => b'K',
+            ChessPiece::KingBlack => b'k',
+            ChessPiece::QueenWhite => b'Q',
+            ChessPiece::QueenBlack => b'q',
         }
     }
-    pub fn new_from_char(c: char) -> Self {
+    pub fn new_from_u8(c: u8) -> Self {
         match c {
-            'P' => ChessPiece::PawnWhite,
-            'p' => ChessPiece::PawnBlack,
-            'R' => ChessPiece::RookWhite,
-            'r' => ChessPiece::RookBlack,
-            'N' => ChessPiece::KnightWhite,
-            'n' => ChessPiece::KnightBlack,
-            'B' => ChessPiece::BishopWhite,
-            'b' => ChessPiece::BishopBlack,
-            'K' => ChessPiece::KingWhite,
-            'k' => ChessPiece::KingBlack,
-            'Q' => ChessPiece::QueenWhite,
-            'q' => ChessPiece::QueenBlack,
+            b'P' => ChessPiece::PawnWhite,
+            b'p' => ChessPiece::PawnBlack,
+            b'R' => ChessPiece::RookWhite,
+            b'r' => ChessPiece::RookBlack,
+            b'N' => ChessPiece::KnightWhite,
+            b'n' => ChessPiece::KnightBlack,
+            b'B' => ChessPiece::BishopWhite,
+            b'b' => ChessPiece::BishopBlack,
+            b'K' => ChessPiece::KingWhite,
+            b'k' => ChessPiece::KingBlack,
+            b'Q' => ChessPiece::QueenWhite,
+            b'q' => ChessPiece::QueenBlack,
             _ => ChessPiece::None,
+        }
+    }
+    pub fn get_color(&self) -> Option<Color> {
+        match *self {
+            Self::None => None,
+            Self::PawnWhite => Some(Color::White),
+            Self::PawnBlack => Some(Color::Black),
+            Self::RookWhite => Some(Color::White),
+            Self::RookBlack => Some(Color::Black),
+            Self::KnightWhite => Some(Color::White),
+            Self::KnightBlack => Some(Color::Black),
+            Self::BishopWhite => Some(Color::White),
+            Self::BishopBlack => Some(Color::Black),
+            Self::KingWhite => Some(Color::White),
+            Self::KingBlack => Some(Color::Black),
+            Self::QueenWhite => Some(Color::White),
+            Self::QueenBlack => Some(Color::Black),
         }
     }
 }
@@ -135,12 +151,12 @@ impl Color {
         }
     }
 
-    pub fn new_from_char(c: char) -> Option<Self> {
+    pub fn new_from_u8(c: u8) -> Option<Self> {
         match c {
-            'w' => Some(Color::White),
-            'W' => Some(Color::White),
-            'b' => Some(Color::Black),
-            'B' => Some(Color::Black),
+            b'w' => Some(Color::White),
+            b'W' => Some(Color::White),
+            b'b' => Some(Color::Black),
+            b'B' => Some(Color::Black),
             _ => None,
         }
     }
@@ -151,16 +167,30 @@ Such types for MoveCode, CastleStateFlag are required for less memory use when c
  */
 
 impl ChessBoardState {
+    pub fn get_piece_unsafe(&self, pos: &Pos) -> ChessPiece {
+        return self.board[(pos.y as usize) * BOARD_SIZE + pos.x as usize];
+    }
+
+    pub fn get_piece(&self, pos: &Pos) -> Option<ChessPiece> {
+        if pos.x >= BOARD_SIZE as u8 || pos.y >= BOARD_SIZE as u8 {
+            return None;
+        }
+        return Some(self.board[(pos.y as usize) * BOARD_SIZE + pos.x as usize]);
+    }
+
+
     pub fn debug_print(&self) {
         for i in 0..self.board.len() {
             if i % 8 == 0 {
                 print!("\n");
             }
-            print!("{}", self.board[i].get_piece_char())
+            print!("{}", self.board[Self::get_display_idx(i)].get_piece_u8())
         }
         print!(
-            "\nMove {}, en passant TODO, castle TODO",
-            self.cur_move.get_name()
+            "\nMove {}, en passant {}, castle {}",
+            self.cur_move.get_name(),
+            self.en_passant,
+            self.castle_state_flags
         );
     }
 
@@ -193,14 +223,15 @@ impl ChessBoardState {
                 None => {
                     return usize::MAX;
                 }
-                Some(x) => match x as char {
-                    '/' => {}
-                    '0'..='9' => cur_idx += (x - '0' as u8) as usize,
-                    ' ' => {
+                Some(x) => match x {
+                    b'/' => {}
+                    b'0'..=b'9' => cur_idx += (x - b'0') as usize,
+                    b' ' => {
                         return i;
                     }
                     _ => {
-                        self.board[Self::get_fen_idx(cur_idx)] = ChessPiece::new_from_char(x as char);
+                        self.board[Self::get_display_idx(cur_idx)] =
+                            ChessPiece::new_from_u8(x);
                         cur_idx += 1;
                     }
                 },
@@ -209,7 +240,7 @@ impl ChessBoardState {
         return usize::MAX;
     }
 
-    fn get_fen_idx(i: usize) -> usize {
+    fn get_display_idx(i: usize) -> usize {
         return 8 * (7 - i / 8) + i % 8;
     }
 
@@ -224,7 +255,7 @@ impl ChessBoardState {
         if cur_parse >= fen_str.len() {
             return 2;
         }
-        match Color::new_from_char(fen_str.bytes().nth(cur_parse).unwrap() as char) {
+        match Color::new_from_u8(fen_str.bytes().nth(cur_parse).unwrap()) {
             None => {
                 return 3;
             }
@@ -242,17 +273,17 @@ impl ChessBoardState {
             if i == fen_str.len() {
                 return 5;
             }
-            match fen_str.bytes().nth(i).unwrap() as char {
-                'K' => {
+            match fen_str.bytes().nth(i).unwrap() {
+                b'K' => {
                     self.castle_state_flags |= CastleStateFlag::WhiteShort as u8;
                 }
-                'k' => {
+                b'k' => {
                     self.castle_state_flags |= CastleStateFlag::BlackShort as u8;
                 }
-                'Q' => {
+                b'Q' => {
                     self.castle_state_flags |= CastleStateFlag::WhiteLong as u8;
                 }
-                'q' => {
+                b'q' => {
                     self.castle_state_flags |= CastleStateFlag::BlackLong as u8;
                 }
                 _ => {
@@ -264,10 +295,10 @@ impl ChessBoardState {
         if cur_parse >= fen_str.len() {
             return 6;
         }
-        if fen_str.chars().nth(cur_parse).unwrap() == '-' {
+        if fen_str.bytes().nth(cur_parse).unwrap() == b'-' {
             cur_parse += 2;
         } else {
-            self.en_passant = Pos::new_from_str(&fen_str[cur_parse..cur_parse+2]).get_code();
+            self.en_passant = Pos::new_from_str(&fen_str[cur_parse..cur_parse + 2]).get_code();
             cur_parse += 3;
         }
         if cur_parse >= fen_str.len() {
