@@ -217,6 +217,12 @@ impl ChessBoardState {
     pub fn get_piece_unsafe(&self, pos: Pos) -> ChessPiece {
         return self.board[Self::get_pos_idx(pos)];
     }
+    pub fn get_piece_coords_unsafe(&self, x: usize, y: usize) -> ChessPiece {
+        return self.board[y * BOARD_SIZE + x];
+    }
+    pub fn get_piece_coords_i8_unsafe(&self, x: i8, y: i8) -> ChessPiece {
+        return self.board[(y as usize) * BOARD_SIZE  + x as usize];
+    }
 
     pub fn get_piece(&self, pos: Pos) -> Option<ChessPiece> {
         if pos.x >= BOARD_SIZE as u8 || pos.y >= BOARD_SIZE as u8 {

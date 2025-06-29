@@ -1,4 +1,7 @@
-#![allow(dead_code)] // TODO REMOVE
+#![allow(dead_code)]
+use crate::game::board;
+
+// TODO REMOVE
 use super::board::*;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -72,7 +75,11 @@ impl ChessBoardState {
     fn apply_en_passant(&mut self, mv: Move) {
         let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
         let mut pos = Pos::new_from_code(self.en_passant);
-        if color == Color::White { pos.y -= 1; } else {pos.y += 1; }
+        if color == Color::White {
+            pos.y -= 1;
+        } else {
+            pos.y += 1;
+        }
         self.board[Self::get_pos_idx(pos)] = ChessPiece::None;
         self.make_simple_move_force(mv);
     }
@@ -109,7 +116,7 @@ impl ChessBoardState {
 
     fn apply_promotion(&mut self, mv: Move, promotion: ChessPiece) {
         self.make_simple_move_force(mv);
-        self.board[Self::get_pos_idx(mv.to)] = promotion; 
+        self.board[Self::get_pos_idx(mv.to)] = promotion;
     }
 
     fn apply_move_force(&mut self, mv: ChessMove) {
@@ -117,7 +124,9 @@ impl ChessBoardState {
             ChessMoveType::Simple => self.make_simple_move_force(mv.mv),
             ChessMoveType::EnPassant => self.apply_en_passant(mv.mv),
             ChessMoveType::Promotion(x) => self.apply_promotion(mv.mv, x),
-            ChessMoveType::CastleLong | ChessMoveType::CastleShort => self.apply_castle(mv.mv, mv.move_type),
+            ChessMoveType::CastleLong | ChessMoveType::CastleShort => {
+                self.apply_castle(mv.mv, mv.move_type)
+            }
         }
     }
 
@@ -131,28 +140,161 @@ impl ChessBoardState {
 
     // does not exclude moves that leave king open
     pub fn get_all_moves(&self) -> Vec<ChessMove> {
-        vec![]
+        let mut result = vec![];
+
+        for x in 0..BOARD_SIZE {
+            for y in 0..BOARD_SIZE {
+                let color = self.get_piece_coords_unsafe(x, y).get_color();
+                if color.is_some() && color.unwrap() == self.turn {
+                    result.append(
+                        &mut self.get_all_moves_from_pos(Pos::new_from_coords(x as i8, y as i8)),
+                    );
+                }
+            }
+        }
+
+        return result;
     }
 
     // Filter moves that leave king open to attack
-    pub fn get_all_moves_checked() -> Vec<ChessMove> {
-        vec![]
+    pub fn get_all_moves_checked(&self) -> Vec<ChessMove> {
+        let mut result = vec![];
+
+        for x in 0..BOARD_SIZE {
+            for y in 0..BOARD_SIZE {
+                let color = self.get_piece_coords_unsafe(x, y).get_color();
+                if color.is_some() && color.unwrap() == self.turn {
+                    result.append(
+                        &mut self.get_all_moves_from_pos_filtered(Pos::new_from_coords(
+                            x as i8, y as i8,
+                        )),
+                    );
+                }
+            }
+        }
+
+        return result;
     }
 
     pub fn get_all_moves_from_pos_filtered(&self, from: Pos) -> Vec<ChessMove> {
-        vec![]
+        let result = self.get_all_moves_from_pos(from);
+
+        return result
+            .into_iter()
+            .filter(|mv| !self.is_move_allowed_by_rules(*mv))
+            .collect();
+    }
+
+    pub fn is_move_allowed_by_rules(&self, mv: ChessMove) -> bool {
+        return self.get_new_pos_after_move(mv).get_king_attacked(self.turn);
     }
 
     pub fn get_king_attacked(&self, color: Color) -> bool {
         return false;
     }
 
-    pub fn get_pos_attacked(&self, color: Color) -> bool {
+    // when cheking if smth is attacked color always means who is attacked
+    pub fn check_attacked_direction(
+        &self,
+        from: Pos,
+        step_x: i8,
+        step_y: i8,
+        step_num: usize,
+        pieces: &[ChessPiece],
+    ) -> bool {
+        let mut x = from.x as i8 + step_x;
+        let mut y = from.y as i8 + step_y;
+        for _ in 0..step_num {
+            if !Self::coords_in_bounds(x, y) {
+                break;
+            }
+            let to = Pos::new_from_coords(x, y);
+            let piece = self.get_piece_unsafe(to);
+            if pieces.contains(&piece) {
+                return true;
+            } else if (piece != ChessPiece::None) {
+                return false;
+            }
+            x += step_x;
+            y += step_y;
+        }
         return false;
     }
 
+    pub fn get_pos_attacked(&self, from: Pos, color: Color) -> bool {
+        let rook_dir = if color == Color::White {
+            [ChessPiece::RookBlack, ChessPiece::QueenBlack]
+        } else {
+            [ChessPiece::RookWhite, ChessPiece::QueenWhite]
+        };
+        let bishop_dir = if color == Color::White {
+            [ChessPiece::BishopBlack, ChessPiece::QueenBlack]
+        } else {
+            [ChessPiece::BishopWhite, ChessPiece::QueenWhite]
+        };
+        let pawn = if color == Color::White {
+            [ChessPiece::PawnBlack]
+        } else {
+            [ChessPiece::PawnWhite]
+        };
+        let knight = if color == Color::White {
+            [ChessPiece::KnightBlack]
+        } else {
+            [ChessPiece::KnightWhite]
+        };
+        let king = if color == Color::White {
+            [ChessPiece::KingBlack]
+        } else {
+            [ChessPiece::KingWhite]
+        };
+        return self.check_attacked_direction(from, 0, 1, 8, &rook_dir)
+            || self.check_attacked_direction(from, 0, -1, 8, &rook_dir)
+            || self.check_attacked_direction(from, -1, 0, 8, &rook_dir)
+            || self.check_attacked_direction(from, 1, 0, 8, &rook_dir)
+            ////
+            || self.check_attacked_direction(from, 1, 1, 8, &bishop_dir)
+            || self.check_attacked_direction(from, 1, -1, 8, &bishop_dir)
+            || self.check_attacked_direction(from, -1, 1, 8, &bishop_dir)
+            || self.check_attacked_direction(from, 1, 1, 8, &bishop_dir)
+            ////
+            || self.check_attacked_direction(from, 1, 0, 1, &king)
+            || self.check_attacked_direction(from, -1, 0, 1, &king)
+            || self.check_attacked_direction(from, 0, 1, 1, &king)
+            || self.check_attacked_direction(from, 0, -1, 1, &king)
+            || self.check_attacked_direction(from, 1, 1, 1, &king)
+            || self.check_attacked_direction(from, 1, -1, 1, &king)
+            || self.check_attacked_direction(from, -1, 1, 1, &king)
+            || self.check_attacked_direction(from, -1, -1, 1, &king)
+            //// pawns
+            || if color == Color::White {
+                self.check_attacked_direction(from, 1, 1, 1, &pawn) ||
+                self.check_attacked_direction(from, -1, 1, 1, &pawn)
+            } else {
+                self.check_attacked_direction(from, 1, -1, 1, &pawn) ||
+                self.check_attacked_direction(from, -1, -1, 1, &pawn)
+            }
+            //// knights
+            || self.check_attacked_direction(from, 1, 2, 1, &knight)
+            || self.check_attacked_direction(from, -1, 2, 1, &knight)
+            || self.check_attacked_direction(from, 1, -2, 1, &knight)
+            || self.check_attacked_direction(from, -1, -2, 1, &knight)
+            || self.check_attacked_direction(from, 2, 1, 1, &knight)
+            || self.check_attacked_direction(from, 2, -1, 1, &knight)
+            || self.check_attacked_direction(from, -2, 1, 1, &knight)
+            || self.check_attacked_direction(from, -2, -1, 1, &knight);
+    }
+
     pub fn get_king_pos(&self, color: Color) -> Pos {
-        return Pos { x: 0, y: 0 };
+        for x in 0..BOARD_SIZE {
+            for y in 0..BOARD_SIZE {
+                if color == Color::White
+                    && self.get_piece_coords_unsafe(x, y) == ChessPiece::KingWhite
+                {
+                    return Pos::new_from_coords(x as i8, y as i8);
+                }
+            }
+        }
+        return Pos::new_from_code(0xFF);
     }
 
     // get moves
@@ -203,6 +345,24 @@ impl ChessBoardState {
         self.add_bishop_moves(from, res);
         self.add_rook_moves(from, res);
     }
+
+    fn check_castle(&self, from: Pos, dir: i8) -> bool {
+        if self.get_piece_coords_i8_unsafe(from.x as i8 + dir, from.y as i8) != ChessPiece::None {
+            return false;
+        }
+        if self.get_piece_coords_i8_unsafe(from.x as i8 + 2 * dir, from.y as i8) != ChessPiece::None {
+            return false;
+        }
+        if dir == -1 && self.get_piece_coords_i8_unsafe(from.x as i8 + 3 * dir, from.y as i8) != ChessPiece::None {
+            return false;
+        }
+        if self.get_pos_attacked(Pos::new_from_coords(from.x as i8 + dir, from.y as i8), self.get_piece_unsafe(from).get_color().unwrap()) {
+
+        } 
+
+        return true;
+    }
+
     fn add_king_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
         self.add_moves_in_direction(from, 1, 1, 1, res);
         self.add_moves_in_direction(from, -1, 1, 1, res);
@@ -213,6 +373,67 @@ impl ChessBoardState {
         self.add_moves_in_direction(from, 0, 1, 1, res);
         self.add_moves_in_direction(from, 0, -1, 1, res);
         // TODO castle
+        let color: Color = self.get_piece_unsafe(from).get_color().unwrap();
+        if color == Color::White
+            && (self.castle_state_flags & (CastleStateFlag::WhiteShort as u8) != 0)
+            && self.check_castle(from, 1)
+        {
+            res.push(ChessMove {
+                mv: Move {
+                    from: from,
+                    to: Pos {
+                        x: from.x + 2,
+                        y: from.y,
+                    },
+                },
+                move_type: ChessMoveType::CastleShort,
+            });
+        }
+        if color == Color::White
+            && (self.castle_state_flags & (CastleStateFlag::WhiteLong as u8) != 0)
+            && self.check_castle(from, -1)
+        {
+            res.push(ChessMove {
+                mv: Move {
+                    from: from,
+                    to: Pos {
+                        x: from.x + 2,
+                        y: from.y,
+                    },
+                },
+                move_type: ChessMoveType::CastleLong,
+            });
+        }
+        if color == Color::Black
+            && (self.castle_state_flags & (CastleStateFlag::BlackShort as u8) != 0)
+            && self.check_castle(from, 1)
+        {
+            res.push(ChessMove {
+                mv: Move {
+                    from: from,
+                    to: Pos {
+                        x: from.x + 2,
+                        y: from.y,
+                    },
+                },
+                move_type: ChessMoveType::CastleShort,
+            });
+        }
+        if color == Color::Black
+            && (self.castle_state_flags & (CastleStateFlag::BlackLong as u8) != 0)
+            && self.check_castle(from, -1)
+        {
+            res.push(ChessMove {
+                mv: Move {
+                    from: from,
+                    to: Pos {
+                        x: from.x + 2,
+                        y: from.y,
+                    },
+                },
+                move_type: ChessMoveType::CastleLong,
+            });
+        }
     }
     fn add_pawn_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
         let piece_color = self.get_piece_unsafe(from).get_color().unwrap();
