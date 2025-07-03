@@ -481,7 +481,8 @@ impl ChessBoardState {
             }
         }
 
-        if result.len() > 0 && from.y == 6 {
+        if result.len() > 0 && piece_color == Color::White && from.y == 6 || 
+        result.len() > 0 && piece_color == Color::Black && from.y == 1 {
             let proms = if piece_color == Color::White {
                 [
                     ChessPiece::RookWhite,
