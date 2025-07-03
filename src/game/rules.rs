@@ -16,6 +16,18 @@ pub struct ChessMove {
     pub move_type: ChessMoveType,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct MoveResult {
+    pub new: ChessPiece,
+    pub remove: ChessPiece,
+}
+
+impl MoveResult {
+    pub fn capture(p: ChessPiece) -> Self {
+        MoveResult{new:ChessPiece::None, remove:p}
+    }
+}
+
 impl ChessBoardState {
     fn count_move(&mut self, pawn_move: bool, capture: bool) {
         self.halfmoves_to_draw = if pawn_move || capture {
@@ -50,17 +62,15 @@ impl ChessBoardState {
     }
 
     // dont check if move follow the rules and if in board
-    fn make_simple_move_force(&mut self, mv: Move) {
-        let from = Self::get_pos_idx(mv.from);
-        let to = Self::get_pos_idx(mv.to);
-
-        let capture = self.board[to] != ChessPiece::None;
+    fn make_simple_move_force(&mut self, mv: Move) -> MoveResult {
+        let captured = self.get_piece_unsafe(mv.to);
+        let capture = captured != ChessPiece::None;
         let pawn_move =
-            self.board[from] == ChessPiece::PawnBlack || self.board[from] == ChessPiece::PawnWhite;
+            self.get_piece_unsafe(mv.from) == ChessPiece::PawnBlack || self.get_piece_unsafe(mv.from) == ChessPiece::PawnWhite;
         self.count_move(pawn_move, capture);
 
-        self.board[to] = self.board[from];
-        self.board[from] = ChessPiece::None;
+        self.set_piece_unsafe(mv.to,self.get_piece_unsafe(mv.from));
+        self.set_piece_unsafe(mv.from,ChessPiece::None);
         if pawn_move && mv.from.y == 1 && mv.to.y == 3 {
             self.en_passant = Pos { x: mv.from.x, y: 2 }.get_code();
         }
@@ -68,9 +78,10 @@ impl ChessBoardState {
             self.en_passant = Pos { x: mv.from.x, y: 5 }.get_code();
         }
         self.update_castle_flags(mv);
+        MoveResult::capture(captured)
     }
 
-    fn apply_en_passant(&mut self, mv: Move) {
+    fn apply_en_passant(&mut self, mv: Move) -> MoveResult {
         let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
         let mut pos = Pos::new_from_code(self.en_passant);
         if color == Color::White {
@@ -78,47 +89,49 @@ impl ChessBoardState {
         } else {
             pos.y += 1;
         }
-        self.board[Self::get_pos_idx(pos)] = ChessPiece::None;
+        let captured = self.get_piece_unsafe(pos);
+        self.set_piece_unsafe(pos,ChessPiece::None);
         self.make_simple_move_force(mv);
+        MoveResult::capture(captured)
     }
 
-    fn apply_castle(&mut self, mv: Move, move_type: ChessMoveType) {
+    fn apply_castle(&mut self, mv: Move, move_type: ChessMoveType) -> MoveResult{
         let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
         let to;
         let from;
         match (color, move_type) {
             (Color::White, ChessMoveType::CastleShort) => {
-                from = Self::get_pos_idx(Pos::new_from_coords(7, 0));
-                to = Self::get_pos_idx(Pos::new_from_coords(5, 0));
+                from = Pos::new_from_coords(7, 0);
+                to = Pos::new_from_coords(5, 0);
             }
             (Color::White, ChessMoveType::CastleLong) => {
-                from = Self::get_pos_idx(Pos::new_from_coords(0, 0));
-                to = Self::get_pos_idx(Pos::new_from_coords(3, 0));
+                from = Pos::new_from_coords(0, 0);
+                to = Pos::new_from_coords(3, 0);
             }
             (Color::Black, ChessMoveType::CastleShort) => {
-                from = Self::get_pos_idx(Pos::new_from_coords(7, 7));
-                to = Self::get_pos_idx(Pos::new_from_coords(5, 70));
+                from = Pos::new_from_coords(7, 7);
+                to = Pos::new_from_coords(5, 70);
             }
             (Color::Black, ChessMoveType::CastleLong) => {
-                from = Self::get_pos_idx(Pos::new_from_coords(0, 7));
-                to = Self::get_pos_idx(Pos::new_from_coords(3, 7));
+                from = Pos::new_from_coords(0, 7);
+                to = Pos::new_from_coords(3, 7);
             }
             _ => {
                 panic!("Logic err");
             }
         }
-
-        self.board[to] = self.board[from];
-        self.board[from] = ChessPiece::None;
-        self.make_simple_move_force(mv);
+        self.set_piece_unsafe(to, self.get_piece_unsafe(from));
+        self.set_piece_unsafe(from, ChessPiece::None);
+        return MoveResult {new: ChessPiece::None, remove: ChessPiece::None};
     }
 
-    fn apply_promotion(&mut self, mv: Move, promotion: ChessPiece) {
-        self.make_simple_move_force(mv);
-        self.board[Self::get_pos_idx(mv.to)] = promotion;
+    fn apply_promotion(&mut self, mv: Move, promotion: ChessPiece) -> MoveResult {
+        let res = self.make_simple_move_force(mv);
+        self.set_piece_unsafe(mv.to, promotion);
+        return MoveResult { new: promotion, remove: res.remove }
     }
 
-    fn apply_move_force(&mut self, mv: ChessMove) {
+    fn apply_move_force(&mut self, mv: ChessMove) -> MoveResult {
         match mv.move_type {
             ChessMoveType::Simple => self.make_simple_move_force(mv.mv),
             ChessMoveType::EnPassant => self.apply_en_passant(mv.mv),
@@ -134,6 +147,11 @@ impl ChessBoardState {
         new_board.apply_move_force(mv);
         return new_board;
     }
+    pub fn get_new_pos_after_move_for_eval(&self, mv: ChessMove) -> (ChessBoardState, MoveResult) {
+        let mut new_board = *self;
+        let res = new_board.apply_move_force(mv);
+        return (new_board, res);
+    }
 
     // move check
 
@@ -143,10 +161,11 @@ impl ChessBoardState {
 
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
-                let color = self.get_piece_coords_unsafe(x, y).get_color();
+                let pos = Pos{x: x as u8, y: y as u8};
+                let color = self.get_piece_unsafe(pos).get_color();
                 if color.is_some() && color.unwrap() == self.turn {
                     result.append(
-                        &mut self.get_all_moves_from_pos(Pos::new_from_coords(x as i8, y as i8)),
+                        &mut self.get_all_moves_from_pos(pos),
                     );
                 }
             }
@@ -161,12 +180,11 @@ impl ChessBoardState {
 
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
-                let color = self.get_piece_coords_unsafe(x, y).get_color();
+                let pos = Pos{x: x as u8, y: y as u8};
+                let color = self.get_piece_unsafe(pos).get_color();
                 if color.is_some() && color.unwrap() == self.turn {
                     result.append(
-                        &mut self.get_all_moves_from_pos_filtered(Pos::new_from_coords(
-                            x as i8, y as i8,
-                        )),
+                        &mut self.get_all_moves_from_pos_filtered(pos),
                     );
                 }
             }

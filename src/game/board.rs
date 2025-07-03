@@ -214,6 +214,10 @@ impl ChessBoardState {
         return String::from_utf8(res).unwrap();
     }
 
+    pub fn set_piece_unsafe(&mut self, pos: Pos, piece: ChessPiece) {
+        self.board[Self::get_pos_idx(pos)] = piece;
+    }
+
     pub fn get_piece_unsafe(&self, pos: Pos) -> ChessPiece {
         return self.board[Self::get_pos_idx(pos)];
     }

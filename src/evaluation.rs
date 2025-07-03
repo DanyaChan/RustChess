@@ -54,52 +54,91 @@ impl Evaluator {
         };
     }
 
-    pub fn eval(&mut self, board: ChessBoardState, depth: i32) -> (ChessMove, f32, Vec<String>) {
+    pub fn evaluate(
+        &mut self,
+        board: &ChessBoardState,
+        depth: usize,
+    ) -> (f32, Vec<(ChessMove, f32)>) {
+        let cur_eval = self.simple_eval(board);
         let max = board.turn == Color::White;
-        let all_moves = board.get_all_moves();
-        if all_moves.len() == 0 {
-            return (
-                ChessMove {
-                    mv: Move::new_from_str("a1-a1"),
-                    move_type: ChessMoveType::Simple,
-                },
-                if board.turn == Color::Black { 2000.0 } else { -2000.0 },
-                vec![]
-            );
-        };
+        let mut branch = vec![Self::get_base_move(0.0); depth];
+        return (self.eval(cur_eval, -1000000.0, 1000000.0, *board, max, depth, &mut branch), branch);
+    }
 
-        let mut best_eval = if depth == 0 {
-            (
-                all_moves[0],
-                self.simple_eval(board.get_new_pos_after_move(all_moves[0])),
-                vec![]
-            )
-        } else {
-            let eval = self.eval(board.get_new_pos_after_move(all_moves[0]), depth - 1);
-            (all_moves[0], eval.1, eval.2)
-        };
-        for i in 1..all_moves.len() {
-            let eval = if depth == 0 {
-                (
-                    all_moves[i],
-                    self.simple_eval(board.get_new_pos_after_move(all_moves[i])),
-                    vec![]
-                )
-            } else {
-                let eval = self.eval(board.get_new_pos_after_move(all_moves[i]), depth - 1);
-                (all_moves[i], eval.1, eval.2)
+    fn get_base_move(value: f32) -> (ChessMove, f32) {
+        (
+            ChessMove {
+                mv: Move::new_from_str("a1-a1"),
+                move_type: ChessMoveType::Simple,
+            },
+            value
+        )
+    }
+
+    fn eval(
+        &mut self,
+        cur_eval: f32,
+        mut alpha: f32,
+        mut beta: f32,
+        board: ChessBoardState,
+        max: bool,
+        depth: usize,
+        branch: &mut Vec<(ChessMove, f32)>
+    ) -> f32 {
+        if depth == 0 {
+            self.low_level_eval_called += 1;
+            return cur_eval;
+        }
+        let all_moves = board.get_all_moves();
+        let mut best_eval = Self::get_base_move(if !max { 1000000.0 } else { -1000000.0 });
+        for i in 0..all_moves.len() {
+            let eval = {
+                let (new_board, res) = board.get_new_pos_after_move_for_eval(all_moves[i]);
+                if res.remove == ChessPiece::KingBlack || res.remove == ChessPiece::KingWhite {
+                    Self::get_base_move(if res.remove == ChessPiece::KingBlack { 1000000.0 } else { -1000000.0 })
+                } else {
+                let value= self.eval(
+                    cur_eval + self.get_result_eval_diff(res),
+                    alpha,
+                    beta,
+                    new_board,
+                    !max,
+                    depth - 1,
+                    branch
+                );
+                    (all_moves[i], value)
+                }
             };
 
             if max && eval.1 > best_eval.1 || !max && eval.1 < best_eval.1 {
-                best_eval = eval;
+                best_eval = eval.clone();
+            }
+            if max {
+                if eval.1 > beta {
+                    break;
+                }
+                if eval.1 > alpha {
+                    alpha = eval.1
+                }
+            } else {
+                if eval.1 < alpha {
+                    break;
+                }
+                if eval.1 < beta {
+                    beta = eval.1
+                }
             }
         }
-        best_eval.2.push(board.get_move_string(best_eval.0) + " " + &best_eval.1.to_string() + " " + &max.to_string());
-        return best_eval;
+
+        branch[depth - 1] = best_eval;
+        return best_eval.1;
     }
 
-    pub fn simple_eval(&mut self, board: ChessBoardState) -> f32 {
-        self.low_level_eval_called += 1;
+    pub fn get_result_eval_diff(&self, move_res: MoveResult) -> f32 {
+        return self.get_piece_value(move_res.new) - self.get_piece_value(move_res.remove);
+    }
+
+    pub fn simple_eval(&self, board: &ChessBoardState) -> f32 {
         let mut eval = 0.0;
         for i in 0..BOARD_ARRAY_SIZE {
             eval += self.get_piece_value(board.board[i]);
