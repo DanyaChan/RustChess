@@ -97,6 +97,7 @@ impl ChessBoardState {
 
     fn apply_castle(&mut self, mv: Move, move_type: ChessMoveType) -> MoveResult{
         let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
+        self.make_simple_move_force(mv);
         let to;
         let from;
         match (color, move_type) {
@@ -110,7 +111,7 @@ impl ChessBoardState {
             }
             (Color::Black, ChessMoveType::CastleShort) => {
                 from = Pos::new_from_coords(7, 7);
-                to = Pos::new_from_coords(5, 70);
+                to = Pos::new_from_coords(5, 7);
             }
             (Color::Black, ChessMoveType::CastleLong) => {
                 from = Pos::new_from_coords(0, 7);
