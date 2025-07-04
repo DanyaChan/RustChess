@@ -1,3 +1,4 @@
+
 // TODO REMOVE
 use super::board::*;
 
@@ -634,43 +635,62 @@ impl ChessBoardState {
         };
     }
 
-    pub fn get_chess_move_from_string(&self, move_str: &str) -> ChessMove {
+    pub fn get_chess_move_from_string(&self, move_str: &str) -> Option<ChessMove> {
         if move_str == "0-0" && self.turn == Color::White {
-            return ChessMove {
+            return Some(ChessMove {
                 mv: Move {
                     from: Pos { x: 4, y: 0 },
                     to: Pos { x: 6, y: 0 },
                 },
                 move_type: ChessMoveType::CastleShort,
-            };
+            });
         }
         if move_str == "0-0" && self.turn == Color::Black {
-            return ChessMove {
+            return Some(ChessMove {
                 mv: Move {
                     from: Pos { x: 4, y: 7 },
                     to: Pos { x: 6, y: 7 },
                 },
                 move_type: ChessMoveType::CastleShort,
-            };
+            });
         }
         if move_str == "0-0-0" && self.turn == Color::White {
-            return ChessMove {
+            return Some(ChessMove {
                 mv: Move {
                     from: Pos { x: 4, y: 0 },
                     to: Pos { x: 2, y: 0 },
                 },
                 move_type: ChessMoveType::CastleLong,
-            };
+            });
         }
         if move_str == "0-0-0" && self.turn == Color::Black {
-            return ChessMove {
+            return Some(ChessMove {
                 mv: Move {
                     from: Pos { x: 4, y: 7 },
                     to: Pos { x: 2, y: 7 },
                 },
                 move_type: ChessMoveType::CastleLong,
-            };
+            });
         }
+        if move_str.len() < 5 {
+            return None;
+        }
+        if *move_str.as_bytes().get(0).unwrap() < b'a'
+        || *move_str.as_bytes().get(0).unwrap() > b'h'
+        || *move_str.as_bytes().get(3).unwrap() < b'a'
+        || *move_str.as_bytes().get(3).unwrap() > b'h'
+        || *move_str.as_bytes().get(1).unwrap() < b'1'
+        || *move_str.as_bytes().get(1).unwrap() > b'8'
+        || *move_str.as_bytes().get(4).unwrap() < b'1'
+        || *move_str.as_bytes().get(4).unwrap() > b'8'
+        {
+            return None;
+        }
+        Some(self.get_chess_move_from_string_unsafe(move_str))
+    }
+
+    fn get_chess_move_from_string_unsafe(&self, move_str: &str) -> ChessMove {
+        
         let mv = Move::new_from_str(move_str);
         let piece = self.get_piece_unsafe(mv.from);
         if piece == ChessPiece::PawnWhite || piece == ChessPiece::PawnBlack {
@@ -680,11 +700,11 @@ impl ChessBoardState {
                     move_type: ChessMoveType::EnPassant,
                 };
             }
-            if move_str.len() == 6 {
+            if move_str.len() == 7 {
                 return ChessMove {
                     mv: mv,
                     move_type: ChessMoveType::Promotion(ChessPiece::new_from_u8(
-                        *move_str.as_bytes().last().unwrap(),
+                        *move_str.as_bytes().get(5).unwrap(),
                     )),
                 };
             }

@@ -11,6 +11,9 @@ struct PieceEvaluation {
 }
 pub struct Evaluator {
     pieces_values: PieceEvaluation,
+    castle_value: f32,
+    pawn_pos_value: [f32; 8],
+    center_pos_value: [f32; 8],
 
     pub low_level_eval_called: i32,
 }
@@ -32,6 +35,9 @@ impl Evaluator {
     pub fn new() -> Self {
         Evaluator {
             pieces_values: PieceEvaluation::new(),
+            castle_value: 0.3,
+            pawn_pos_value: [0.0, 0.0, 0.05, 0.1, 0.1, 0.3, 1.0, 0.0],
+            center_pos_value: [-0.05, 0.0, 0.1, 0.2, 0.2, 0.1, 0.0, -0.05],
             low_level_eval_called: 0,
         }
     }
@@ -62,7 +68,18 @@ impl Evaluator {
         let cur_eval = self.simple_eval(board);
         let max = board.turn == Color::White;
         let mut branch = vec![Self::get_base_move(0.0); depth];
-        return (self.eval(cur_eval, -1000000.0, 1000000.0, *board, max, depth, &mut branch), branch);
+        return (
+            self.eval(
+                cur_eval,
+                -1000000.0,
+                1000000.0,
+                *board,
+                max,
+                depth,
+                &mut branch,
+            ),
+            branch,
+        );
     }
 
     fn get_base_move(value: f32) -> (ChessMove, f32) {
@@ -71,7 +88,7 @@ impl Evaluator {
                 mv: Move::new_from_str("a1-a1"),
                 move_type: ChessMoveType::Simple,
             },
-            value
+            value,
         )
     }
 
@@ -83,7 +100,7 @@ impl Evaluator {
         board: ChessBoardState,
         max: bool,
         depth: usize,
-        branch: &mut Vec<(ChessMove, f32)>
+        branch: &mut Vec<(ChessMove, f32)>,
     ) -> f32 {
         if depth == 0 {
             self.low_level_eval_called += 1;
@@ -95,17 +112,21 @@ impl Evaluator {
             let eval = {
                 let (new_board, res) = board.get_new_pos_after_move_for_eval(all_moves[i]);
                 if res.remove == ChessPiece::KingBlack || res.remove == ChessPiece::KingWhite {
-                    Self::get_base_move(if res.remove == ChessPiece::KingBlack { 1000000.0 } else { -1000000.0 })
+                    Self::get_base_move(if res.remove == ChessPiece::KingBlack {
+                        1000000.0
+                    } else {
+                        -1000000.0
+                    })
                 } else {
-                let value= self.eval(
-                    cur_eval + self.get_result_eval_diff(res),
-                    alpha,
-                    beta,
-                    new_board,
-                    !max,
-                    depth - 1,
-                    branch
-                );
+                    let value = self.eval(
+                        cur_eval + self.get_result_eval_diff(&new_board, res, all_moves[i]),
+                        alpha,
+                        beta,
+                        new_board,
+                        !max,
+                        depth - 1,
+                        branch,
+                    );
                     (all_moves[i], value)
                 }
             };
@@ -134,14 +155,44 @@ impl Evaluator {
         return best_eval.1;
     }
 
-    pub fn get_result_eval_diff(&self, move_res: MoveResult) -> f32 {
-        return self.get_piece_value(move_res.new) - self.get_piece_value(move_res.remove);
+    fn get_result_eval_diff(
+        &self,
+        board: &ChessBoardState,
+        move_res: MoveResult,
+        mv: ChessMove,
+    ) -> f32 {
+        let piece = board.get_piece_unsafe(mv.mv.to);
+        let color = piece.get_color().unwrap();
+        let mut sum = 0.0;
+        let mult = if color == Color::White { 1.0 } else { -1.0 };
+        if mv.move_type == ChessMoveType::CastleLong || mv.move_type == ChessMoveType::CastleLong {
+            sum += self.castle_value * mult;
+        }
+        sum += self.get_piece_value_from_pos(piece, mv.mv.to)
+            - self.get_piece_value_from_pos(piece, mv.mv.from);
+        sum += self.get_piece_value(move_res.new) - self.get_piece_value(move_res.remove);
+        return sum;
     }
 
-    pub fn simple_eval(&self, board: &ChessBoardState) -> f32 {
+    fn get_piece_value_from_pos(&self, piece: ChessPiece, pos: Pos) -> f32 {
+        let color = piece.get_color().unwrap();
+        let mult = if color == Color::White { 1.0 } else { -1.0 };
+        if piece == ChessPiece::PawnWhite {
+            return self.pawn_pos_value[pos.y as usize];
+        }
+        if piece == ChessPiece::PawnBlack {
+            return -self.pawn_pos_value[7 - pos.y as usize];
+        }
+        return mult * (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 2.0;
+    }
+
+    fn simple_eval(&self, board: &ChessBoardState) -> f32 {
         let mut eval = 0.0;
-        for i in 0..BOARD_ARRAY_SIZE {
-            eval += self.get_piece_value(board.board[i]);
+        for x in 0..BOARD_SIZE as i8 {
+            for y in 0..BOARD_SIZE as i8 {
+                let piece = board.get_piece_unsafe(Pos::new_from_coords(x, y));
+                eval += self.get_piece_value(piece);
+            }
         }
         return eval;
     }

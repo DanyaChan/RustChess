@@ -252,7 +252,7 @@ impl ChessBoardState {
             if i % 8 == 0 {
                 print!("\n");
             }
-            print!("{}", self.board[Self::get_display_idx(i)].get_piece_u8() as char)
+            print!("{} ", self.board[Self::get_display_idx(i)].get_piece_u8() as char)
         }
         print!(
             "\nMove {}, en passant {}, castle {}\n",
