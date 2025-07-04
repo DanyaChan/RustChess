@@ -700,7 +700,7 @@ impl ChessBoardState {
                     move_type: ChessMoveType::EnPassant,
                 };
             }
-            if move_str.len() == 7 {
+            if move_str.len() == 6 {
                 return ChessMove {
                     mv: mv,
                     move_type: ChessMoveType::Promotion(ChessPiece::new_from_u8(

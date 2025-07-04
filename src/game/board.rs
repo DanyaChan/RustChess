@@ -249,13 +249,16 @@ impl ChessBoardState {
 
     pub fn debug_print(&self) {
         for i in 0..self.board.len() {
-            if i % 8 == 0 {
-                print!("\n");
+            if i > 0 && i % 8 == 0 {
+                print!(" | {}\n", 9 - i / 8);
             }
             print!("{} ", self.board[Self::get_display_idx(i)].get_piece_u8() as char)
         }
+        print!(" | 1\n");
+        print!("----------------\n");
+        print!("a b c d e f g h \n");
         print!(
-            "\nMove {}, en passant {}, castle {}\n",
+            "\nTurn {}, en passant {}, castle {}\n\n",
             self.turn.get_name(),
             Pos::new_from_code(self.en_passant).get_str(),
             self.get_castle_state_str()
