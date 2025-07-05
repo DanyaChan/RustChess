@@ -61,11 +61,11 @@ impl Pos {
         Pos {
             x: match pos_str.bytes().nth(0) {
                 Some(x) => x - b'a' as u8,
-                None => 0,
+                None => 0xF,
             },
             y: match pos_str.bytes().nth(1) {
                 Some(x) => x - b'1' as u8,
-                None => 0,
+                None => 0xF,
             },
         }
     }

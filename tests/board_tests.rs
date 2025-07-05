@@ -10,15 +10,11 @@ mod tests {
         let pos2 = Pos::from_str("c7");
         let pos3 = Pos::from_str("h1");
         let pos4 = Pos::from_str("");
-        assert!(pos1.x == 4 && pos1.y == 1);
-        assert!(pos2.x == 2 && pos2.y == 6);
-        assert!(pos3.x == 7 && pos3.y == 0);
-        assert!(pos4.x == 0 && pos4.y == 0);
 
         assert_eq!(pos1, Pos{x:4, y:1});
         assert_eq!(pos2, Pos{x:2, y:6});
         assert_eq!(pos3, Pos{x:7, y:0});
-        assert_eq!(pos4, Pos{x:0, y:0});
+        assert_eq!(pos4, Pos{x:0xf, y:0xf});
     }
 
     #[test]
