@@ -7,9 +7,10 @@ pub mod evaluation;
 use evaluation::Evaluator;
 fn main() {
     let mut board =
-        ChessBoardState::new_from_fen("2r1kb1r/p3pp2/2p2np1/7p/1P2b3/5B1P/PRP2PP1/2B1R1K1 w - - 0 1")
+        ChessBoardState::from_fen("2r1kb1r/p3pp2/2p2np1/7p/1P2b3/5B1P/PRP2PP1/2B1R1K1 w - - 0 1")
             .unwrap();
     let mut eval = Evaluator::new();
+    board.debug_print();
     loop {
         let mut mv;
         loop {

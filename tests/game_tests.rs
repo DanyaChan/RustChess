@@ -2,7 +2,7 @@ mod tests {
     use ::rust_chess::game::board::*;
     #[test]
     fn test_all_moves() {
-        let board = ChessBoardState::new_from_fen(
+        let board = ChessBoardState::from_fen(
             "r3k1n1/pPp3p1/Q1n2r2/1B1qppPp/1b1P3N/2N1B1Pb/PP5P/R3K2R w KQ h6 0 1",
         )
         .unwrap();
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_all_moves_filetered() {
-        let board = ChessBoardState::new_from_fen(
+        let board = ChessBoardState::from_fen(
             "r3k1n1/pPp3p1/Q1n2r2/1B1qppPp/1b1P3N/2N1B1Pb/PP5P/R3K2R w KQ h6 0 1",
         )
         .unwrap();

@@ -1,4 +1,3 @@
-
 // TODO REMOVE
 use super::board::*;
 
@@ -30,9 +29,7 @@ impl ChessMove {
             ChessMoveType::EnPassant => self.mv.get_str() + "e",
             ChessMoveType::CastleLong => "0-0-0".to_string(),
             ChessMoveType::CastleShort => "0-0".to_string(),
-            ChessMoveType::Promotion(x) => {
-                self.mv.get_str() + &(x.get_piece_u8() as char).to_string()
-            }
+            ChessMoveType::Promotion(x) => self.mv.get_str() + &(x.get_u8() as char).to_string(),
         };
     }
 }
@@ -47,6 +44,19 @@ impl MoveResult {
 }
 
 impl ChessBoardState {
+    // Apply moves
+    pub fn get_new_pos_after_move(&self, mv: ChessMove) -> ChessBoardState {
+        let mut new_board = *self;
+        new_board.apply_move_force(mv);
+        return new_board;
+    }
+    pub fn get_new_pos_after_move_for_eval(&self, mv: ChessMove) -> (ChessBoardState, MoveResult) {
+        let mut new_board = *self;
+        let res = new_board.apply_move_force(mv);
+        return (new_board, res);
+    }
+
+    // Apply moves utils
     fn count_move(&mut self, pawn_move: bool, capture: bool) {
         self.halfmoves_to_draw = if pawn_move || capture {
             0
@@ -101,7 +111,7 @@ impl ChessBoardState {
 
     fn apply_en_passant(&mut self, mv: Move) -> MoveResult {
         let color = self.get_piece_unsafe(mv.from).get_color().unwrap();
-        let mut pos = Pos::new_from_code(self.en_passant);
+        let mut pos = Pos::from_code(self.en_passant);
         if color == Color::White {
             pos.y -= 1;
         } else {
@@ -120,23 +130,23 @@ impl ChessBoardState {
         let from;
         match (color, move_type) {
             (Color::White, ChessMoveType::CastleShort) => {
-                from = Pos::new_from_coords(7, 0);
-                to = Pos::new_from_coords(5, 0);
+                from = Pos::from_coords(7, 0);
+                to = Pos::from_coords(5, 0);
             }
             (Color::White, ChessMoveType::CastleLong) => {
-                from = Pos::new_from_coords(0, 0);
-                to = Pos::new_from_coords(3, 0);
+                from = Pos::from_coords(0, 0);
+                to = Pos::from_coords(3, 0);
             }
             (Color::Black, ChessMoveType::CastleShort) => {
-                from = Pos::new_from_coords(7, 7);
-                to = Pos::new_from_coords(5, 7);
+                from = Pos::from_coords(7, 7);
+                to = Pos::from_coords(5, 7);
             }
             (Color::Black, ChessMoveType::CastleLong) => {
-                from = Pos::new_from_coords(0, 7);
-                to = Pos::new_from_coords(3, 7);
+                from = Pos::from_coords(0, 7);
+                to = Pos::from_coords(3, 7);
             }
             _ => {
-                panic!("Logic err");
+                unreachable!("Logic err");
             }
         }
         self.set_piece_unsafe(to, self.get_piece_unsafe(from));
@@ -167,17 +177,6 @@ impl ChessBoardState {
         }
     }
 
-    pub fn get_new_pos_after_move(&self, mv: ChessMove) -> ChessBoardState {
-        let mut new_board = *self;
-        new_board.apply_move_force(mv);
-        return new_board;
-    }
-    pub fn get_new_pos_after_move_for_eval(&self, mv: ChessMove) -> (ChessBoardState, MoveResult) {
-        let mut new_board = *self;
-        let res = new_board.apply_move_force(mv);
-        return (new_board, res);
-    }
-
     // move check
 
     // does not exclude moves that leave king open
@@ -200,7 +199,6 @@ impl ChessBoardState {
         return result;
     }
 
-    // Filter moves that leave king open to attack
     pub fn get_all_moves_checked(&self) -> Vec<ChessMove> {
         let mut result = vec![];
 
@@ -253,7 +251,7 @@ impl ChessBoardState {
             if !Self::coords_in_bounds(x, y) {
                 break;
             }
-            let to = Pos::new_from_coords(x, y);
+            let to = Pos::from_coords(x, y);
             let piece = self.get_piece_unsafe(to);
             if pieces.contains(&piece) {
                 return true;
@@ -335,11 +333,11 @@ impl ChessBoardState {
                 if color == Color::White
                     && self.get_piece_coords_unsafe(x, y) == ChessPiece::KingWhite
                 {
-                    return Pos::new_from_coords(x as i8, y as i8);
+                    return Pos::from_coords(x as i8, y as i8);
                 }
             }
         }
-        return Pos::new_from_code(0xFF);
+        return Pos::from_code(0xFF);
     }
 
     pub fn is_legal_move(&self, mv: ChessMove) -> bool {
@@ -377,7 +375,7 @@ impl ChessBoardState {
         return res;
     }
 
-    // utils
+    // Movegen utils
 
     fn add_rook_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
         self.add_moves_in_direction(from, 1, 0, 8, res);
@@ -421,7 +419,7 @@ impl ChessBoardState {
             return false;
         }
         if self.get_pos_attacked(
-            Pos::new_from_coords(from.x as i8 + dir, from.y as i8),
+            Pos::from_coords(from.x as i8 + dir, from.y as i8),
             self.get_piece_unsafe(from).get_color().unwrap(),
         ) {
             return false;
@@ -502,6 +500,7 @@ impl ChessBoardState {
             });
         }
     }
+
     fn add_pawn_moves(&self, from: Pos, res: &mut Vec<ChessMove>) {
         let mut result = vec![];
         let piece_color = self.get_piece_unsafe(from).get_color().unwrap();
@@ -519,7 +518,7 @@ impl ChessBoardState {
         self.add_moves_in_direction_general(from, 1, y_dir, 1, true, true, &mut result);
         self.add_moves_in_direction_general(from, -1, y_dir, 1, true, true, &mut result);
 
-        let en_passant = Pos::new_from_code(self.en_passant);
+        let en_passant = Pos::from_code(self.en_passant);
 
         if (en_passant.y as i8 - from.y as i8) == y_dir
             && [-1 as i8, 1 as i8].contains(&(en_passant.x as i8 - from.x as i8))
@@ -589,7 +588,7 @@ impl ChessBoardState {
             if !Self::coords_in_bounds(x, y) {
                 break;
             }
-            let to = Pos::new_from_coords(x, y);
+            let to = Pos::from_coords(x, y);
             let piece_to_color = self.get_piece_unsafe(to).get_color();
             if piece_to_color.is_some_and(|x| x == color) {
                 break;
@@ -623,15 +622,13 @@ impl ChessBoardState {
         self.add_moves_in_direction_general(from, step_x, step_y, step_num, true, false, res);
     }
 
+    // Display and input
     pub fn get_move_string(&self, mv: ChessMove) -> String {
         let piece = self.get_piece_unsafe(mv.mv.from);
         return match mv.move_type {
             ChessMoveType::CastleLong => "0-0-0".to_string(),
             ChessMoveType::CastleShort => "0-0".to_string(),
-            _ => {
-                (piece.get_piece_u8().to_ascii_uppercase() as char).to_string()
-                    + &mv.get_move_string()
-            }
+            _ => (piece.get_u8().to_ascii_uppercase() as char).to_string() + &mv.get_move_string(),
         };
     }
 
@@ -676,13 +673,13 @@ impl ChessBoardState {
             return None;
         }
         if *move_str.as_bytes().get(0).unwrap() < b'a'
-        || *move_str.as_bytes().get(0).unwrap() > b'h'
-        || *move_str.as_bytes().get(3).unwrap() < b'a'
-        || *move_str.as_bytes().get(3).unwrap() > b'h'
-        || *move_str.as_bytes().get(1).unwrap() < b'1'
-        || *move_str.as_bytes().get(1).unwrap() > b'8'
-        || *move_str.as_bytes().get(4).unwrap() < b'1'
-        || *move_str.as_bytes().get(4).unwrap() > b'8'
+            || *move_str.as_bytes().get(0).unwrap() > b'h'
+            || *move_str.as_bytes().get(3).unwrap() < b'a'
+            || *move_str.as_bytes().get(3).unwrap() > b'h'
+            || *move_str.as_bytes().get(1).unwrap() < b'1'
+            || *move_str.as_bytes().get(1).unwrap() > b'8'
+            || *move_str.as_bytes().get(4).unwrap() < b'1'
+            || *move_str.as_bytes().get(4).unwrap() > b'8'
         {
             return None;
         }
@@ -690,8 +687,7 @@ impl ChessBoardState {
     }
 
     fn get_chess_move_from_string_unsafe(&self, move_str: &str) -> ChessMove {
-        
-        let mv = Move::new_from_str(move_str);
+        let mv = Move::from_str(move_str);
         let piece = self.get_piece_unsafe(mv.from);
         if piece == ChessPiece::PawnWhite || piece == ChessPiece::PawnBlack {
             if mv.to.get_code() == self.en_passant {
@@ -703,7 +699,7 @@ impl ChessBoardState {
             if move_str.len() == 6 {
                 return ChessMove {
                     mv: mv,
-                    move_type: ChessMoveType::Promotion(ChessPiece::new_from_u8(
+                    move_type: ChessMoveType::Promotion(ChessPiece::from_u8(
                         *move_str.as_bytes().get(5).unwrap(),
                     )),
                 };

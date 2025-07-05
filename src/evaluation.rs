@@ -85,7 +85,7 @@ impl Evaluator {
     fn get_base_move(value: f32) -> (ChessMove, f32) {
         (
             ChessMove {
-                mv: Move::new_from_str("a1-a1"),
+                mv: Move::from_str("a1-a1"),
                 move_type: ChessMoveType::Simple,
             },
             value,
@@ -112,11 +112,7 @@ impl Evaluator {
             let eval = {
                 let (new_board, res) = board.get_new_pos_after_move_for_eval(all_moves[i]);
                 if res.remove == ChessPiece::KingBlack || res.remove == ChessPiece::KingWhite {
-                    Self::get_base_move(if res.remove == ChessPiece::KingBlack {
-                        1000000.0
-                    } else {
-                        -1000000.0
-                    })
+                    Self::get_base_move(-Self::get_piece_value(&self, res.remove))
                 } else {
                     let value = self.eval(
                         cur_eval + self.get_result_eval_diff(&new_board, res, all_moves[i]),
@@ -190,7 +186,7 @@ impl Evaluator {
         let mut eval = 0.0;
         for x in 0..BOARD_SIZE as i8 {
             for y in 0..BOARD_SIZE as i8 {
-                let piece = board.get_piece_unsafe(Pos::new_from_coords(x, y));
+                let piece = board.get_piece_unsafe(Pos::from_coords(x, y));
                 eval += self.get_piece_value(piece);
             }
         }

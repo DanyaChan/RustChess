@@ -6,10 +6,10 @@ mod tests {
     use::rust_chess::game::board::*;
     #[test]
     fn test_load_pos() {
-        let pos1 = Pos::new_from_str("e2");
-        let pos2 = Pos::new_from_str("c7");
-        let pos3 = Pos::new_from_str("h1");
-        let pos4 = Pos::new_from_str("");
+        let pos1 = Pos::from_str("e2");
+        let pos2 = Pos::from_str("c7");
+        let pos3 = Pos::from_str("h1");
+        let pos4 = Pos::from_str("");
         assert!(pos1.x == 4 && pos1.y == 1);
         assert!(pos2.x == 2 && pos2.y == 6);
         assert!(pos3.x == 7 && pos3.y == 0);
@@ -23,18 +23,16 @@ mod tests {
 
     #[test]
     fn run_load_move() {
-        let move1 = Move::new_from_str("e2-e4");
+        let move1 = Move::from_str("e2-e4");
         assert_eq!(move1.get_code(), 0x3414);
 
-        let move2 = Move::new_from_str("f4-h3");
+        let move2 = Move::from_str("f4-h3");
         assert_eq!(move2.get_code(), 0x2735);
     }
 
     #[test]
     fn test_load_fen_default() {
-        let mut fen = ChessBoardState::new();
-        let scan_result = fen.parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-        assert_eq!(scan_result.is_ok(), true);
+        let fen = ChessBoardState::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         assert_eq!(fen.turn, Color::White);
         assert_eq!(fen.en_passant, 0xFF);
         assert_eq!(fen.castle_state_flags, 0x0F);
@@ -57,9 +55,7 @@ mod tests {
 
     #[test]
     fn test_load_fen() {
-        let mut fen = ChessBoardState::new();
-        let scan_result = fen.parse_fen("r1b1kbnr/ppp3p1/2n5/1B1qppPp/3P3N/2N1B3/PPP2P1P/R2QK2R w Kq h6 1 38");
-        assert_eq!(scan_result.is_ok(), true);
+        let fen = ChessBoardState::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         assert_eq!(fen.turn, Color::White);
         assert_eq!(fen.en_passant, 0x57);
         assert_eq!(fen.castle_state_flags, 0x00 as u8 | CastleStateFlag::BlackLong as u8 | CastleStateFlag::WhiteShort as u8);
