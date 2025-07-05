@@ -1,6 +1,37 @@
 use rust_chess::game::board::*;
 use rust_chess::game::rules::*;
 
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+
+#[derive(Debug, Clone, Copy)]
+struct EvaluationCandidate {
+    mv: ChessMove,
+    value: f32,
+}
+
+impl PartialEq for EvaluationCandidate {
+    fn eq(&self, other: &Self) -> bool {
+        self.mv == other.mv
+    }
+}
+impl Eq for EvaluationCandidate {}
+impl Ord for EvaluationCandidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        return self.value.partial_cmp(&other.value).unwrap();
+    }
+}
+impl PartialOrd for EvaluationCandidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        return self.value.partial_cmp(&other.value);
+    }
+}
+impl EvaluationCandidate {
+    fn new(mv: ChessMove, val: f32) -> Self {
+        EvaluationCandidate { mv: mv, value: val }
+    }
+}
+
 struct PieceEvaluation {
     pub king: f32,
     pub queen: f32,
@@ -78,18 +109,32 @@ impl Evaluator {
                 depth,
                 &mut branch,
             ),
-            branch,
+            branch.iter().map(|x| (x.mv, x.value)).collect(), //TODO refactor
         );
     }
 
-    fn get_base_move(value: f32) -> (ChessMove, f32) {
-        (
-            ChessMove {
+    fn get_base_move(value: f32) -> EvaluationCandidate {
+        EvaluationCandidate {
+            mv: ChessMove {
                 mv: Move::from_str("a1-a1"),
                 move_type: ChessMoveType::Simple,
             },
             value,
-        )
+        }
+    }
+
+    // TODO refactor config in Evaluator 
+    fn get_depth(_: usize, cur: usize, depth: usize) -> usize {
+        if depth >= 1 && cur < 2 {
+            return depth - 1;
+        }
+        if depth >= 2 && cur < 4 {
+            return depth * 4 / 5 - 1;
+        }
+        if depth >= 3 && cur < 6 {
+            return depth * 2 / 3 - 1;
+        }
+        return depth / 2;
     }
 
     fn eval(
@@ -100,55 +145,72 @@ impl Evaluator {
         board: ChessBoardState,
         max: bool,
         depth: usize,
-        branch: &mut Vec<(ChessMove, f32)>,
+        branch: &mut Vec<EvaluationCandidate>,
     ) -> f32 {
         if depth == 0 {
             self.low_level_eval_called += 1;
             return cur_eval;
         }
         let all_moves = board.get_all_moves();
-        let mut best_eval = Self::get_base_move(if !max { 1000000.0 } else { -1000000.0 });
-        for i in 0..all_moves.len() {
+        if all_moves.is_empty() {
+            return if !max { 1000000.0 } else { -1000000.0 };
+        }
+        let mut moves_queue = BinaryHeap::<EvaluationCandidate>::new();
+        for mv in all_moves {
+            let (new_board, res) = board.get_new_pos_after_move_for_eval(mv); // TODO optimise even more dont make new board twice
+            let value = if max {
+                cur_eval + self.get_result_eval_diff(&new_board, res, mv)
+            } else {
+                -cur_eval - self.get_result_eval_diff(&new_board, res, mv)
+            };
+            moves_queue.push(EvaluationCandidate {
+                mv: mv,
+                value: value,
+            });
+        }
+        let mut best_eval = Self::get_base_move(if !max { 10000000.0 } else { -10000000.0 });
+        for (i, mv) in moves_queue.iter().enumerate() {
             let eval = {
-                let (new_board, res) = board.get_new_pos_after_move_for_eval(all_moves[i]);
+                let (new_board, res) = board.get_new_pos_after_move_for_eval(mv.mv);
                 if res.remove == ChessPiece::KingBlack || res.remove == ChessPiece::KingWhite {
                     Self::get_base_move(-Self::get_piece_value(&self, res.remove))
                 } else {
+                    let new_depth = Self::get_depth(moves_queue.len(), i, depth);
                     let value = self.eval(
-                        cur_eval + self.get_result_eval_diff(&new_board, res, all_moves[i]),
+                        cur_eval + self.get_result_eval_diff(&new_board, res, mv.mv),
                         alpha,
                         beta,
                         new_board,
                         !max,
-                        depth - 1,
+                        new_depth,
                         branch,
                     );
-                    (all_moves[i], value)
+                    EvaluationCandidate::new(mv.mv, value)
                 }
             };
 
-            if max && eval.1 > best_eval.1 || !max && eval.1 < best_eval.1 {
+            if max && eval.value > best_eval.value || !max && eval.value < best_eval.value {
                 best_eval = eval.clone();
             }
             if max {
-                if eval.1 > beta {
+                if eval.value > beta {
                     break;
                 }
-                if eval.1 > alpha {
-                    alpha = eval.1
+                if eval.value > alpha {
+                    alpha = eval.value
                 }
             } else {
-                if eval.1 < alpha {
+                if eval.value < alpha {
                     break;
                 }
-                if eval.1 < beta {
-                    beta = eval.1
+                if eval.value < beta {
+                    beta = eval.value
                 }
             }
         }
 
         branch[depth - 1] = best_eval;
-        return best_eval.1;
+        return best_eval.value;
     }
 
     fn get_result_eval_diff(
@@ -174,12 +236,14 @@ impl Evaluator {
         let color = piece.get_color().unwrap();
         let mult = if color == Color::White { 1.0 } else { -1.0 };
         if piece == ChessPiece::PawnWhite {
-            return self.pawn_pos_value[pos.y as usize];
+            return self.pawn_pos_value[pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 4.0;
         }
         if piece == ChessPiece::PawnBlack {
-            return -self.pawn_pos_value[7 - pos.y as usize];
+            return -self.pawn_pos_value[7 - pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 4.0;
         }
-        return mult * (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 2.0;
+        return mult
+            * (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize])
+            / 2.0;
     }
 
     fn simple_eval(&self, board: &ChessBoardState) -> f32 {
