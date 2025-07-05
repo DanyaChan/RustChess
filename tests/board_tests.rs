@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn test_load_fen() {
-        let fen = ChessBoardState::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let fen = ChessBoardState::from_fen("r1b1kbnr/ppp3p1/2n5/1B1qppPp/3P3N/2N1B3/PPP2P1P/R2QK2R w Kq h6 1 38").unwrap();
         assert_eq!(fen.turn, Color::White);
         assert_eq!(fen.en_passant, 0x57);
         assert_eq!(fen.castle_state_flags, 0x00 as u8 | CastleStateFlag::BlackLong as u8 | CastleStateFlag::WhiteShort as u8);

@@ -181,7 +181,7 @@ impl ChessBoardState {
 
     // does not exclude moves that leave king open
     pub fn get_all_moves(&self) -> Vec<ChessMove> {
-        let mut result = vec![];
+        let mut result = Vec::with_capacity(30);
 
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
@@ -191,7 +191,7 @@ impl ChessBoardState {
                 };
                 let color = self.get_piece_unsafe(pos).get_color();
                 if color.is_some() && color.unwrap() == self.turn {
-                    result.append(&mut self.get_all_moves_from_pos(pos));
+                    self.add_all_moves_from_pos(pos, &mut result);
                 }
             }
         }
@@ -358,21 +358,26 @@ impl ChessBoardState {
     pub fn get_all_moves_from_pos(&self, from: Pos) -> Vec<ChessMove> {
         let mut res = vec![];
 
-        match self.get_piece_unsafe(from) {
-            ChessPiece::None => {}
-            ChessPiece::RookBlack | ChessPiece::RookWhite => self.add_rook_moves(from, &mut res),
-            ChessPiece::KnightBlack | ChessPiece::KnightWhite => {
-                self.add_knight_moves(from, &mut res)
-            }
-            ChessPiece::BishopBlack | ChessPiece::BishopWhite => {
-                self.add_bishop_moves(from, &mut res)
-            }
-            ChessPiece::QueenBlack | ChessPiece::QueenWhite => self.add_queen_moves(from, &mut res),
-            ChessPiece::KingBlack | ChessPiece::KingWhite => self.add_king_moves(from, &mut res),
-            ChessPiece::PawnBlack | ChessPiece::PawnWhite => self.add_pawn_moves(from, &mut res),
-        }
+        self.add_all_moves_from_pos(from, &mut res);
 
         return res;
+    }
+
+    pub fn add_all_moves_from_pos(&self, from: Pos, res: &mut Vec<ChessMove>) {
+
+        match self.get_piece_unsafe(from) {
+            ChessPiece::None => {}
+            ChessPiece::RookBlack | ChessPiece::RookWhite => self.add_rook_moves(from, res),
+            ChessPiece::KnightBlack | ChessPiece::KnightWhite => {
+                self.add_knight_moves(from, res)
+            }
+            ChessPiece::BishopBlack | ChessPiece::BishopWhite => {
+                self.add_bishop_moves(from, res)
+            }
+            ChessPiece::QueenBlack | ChessPiece::QueenWhite => self.add_queen_moves(from, res),
+            ChessPiece::KingBlack | ChessPiece::KingWhite => self.add_king_moves(from, res),
+            ChessPiece::PawnBlack | ChessPiece::PawnWhite => self.add_pawn_moves(from, res),
+        }
     }
 
     // Movegen utils
