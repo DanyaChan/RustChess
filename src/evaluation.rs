@@ -1,6 +1,6 @@
 use rust_chess::game::board::*;
 use rust_chess::game::rules::*;
-
+use rust_chess::utils::object_pool::ObjectPool;
 struct PieceEvaluation {
     pub king: f32,
     pub queen: f32,
@@ -14,6 +14,7 @@ pub struct Evaluator {
     castle_value: f32,
     pawn_pos_value: [f32; 8],
     center_pos_value: [f32; 8],
+    object_pool: ObjectPool<ChessMove>,
 
     pub low_level_eval_called: i32,
 }
@@ -38,6 +39,7 @@ impl Evaluator {
             castle_value: 0.3,
             pawn_pos_value: [0.0, 0.0, 0.05, 0.1, 0.1, 0.3, 1.0, 0.0],
             center_pos_value: [-0.05, 0.0, 0.1, 0.2, 0.2, 0.1, 0.0, -0.05],
+            object_pool: ObjectPool::new(20, 60),
             low_level_eval_called: 0,
         }
     }
@@ -106,7 +108,9 @@ impl Evaluator {
             self.low_level_eval_called += 1;
             return cur_eval;
         }
-        let all_moves = board.get_all_moves();
+        let mut all_moves_object = self.object_pool.get();
+        let all_moves = &mut all_moves_object.value;
+        board.add_all_moves(*all_moves);
         let mut best_eval = Self::get_base_move(if !max { 1000000.0 } else { -1000000.0 });
         for i in 0..all_moves.len() {
             let eval = {
@@ -146,7 +150,8 @@ impl Evaluator {
                 }
             }
         }
-
+        all_moves.clear();
+        self.object_pool.return_back(all_moves_object);
         branch[depth - 1] = best_eval;
         return best_eval.1;
     }

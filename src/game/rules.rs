@@ -89,7 +89,7 @@ impl ChessBoardState {
         }
     }
 
-    // dont check if move follow the rules and if in board
+    // don't check if the move follows the rules and if is in board's borders
     fn make_simple_move_force(&mut self, mv: Move) -> MoveResult {
         let captured = self.get_piece_unsafe(mv.to);
         let capture = captured != ChessPiece::None;
@@ -182,7 +182,11 @@ impl ChessBoardState {
     // does not exclude moves that leave king open
     pub fn get_all_moves(&self) -> Vec<ChessMove> {
         let mut result = Vec::with_capacity(30);
+        self.add_all_moves(&mut result);
+        return result;
+    }
 
+    pub fn add_all_moves(&self, res: &mut Vec<ChessMove>) {
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
                 let pos = Pos {
@@ -191,12 +195,10 @@ impl ChessBoardState {
                 };
                 let color = self.get_piece_unsafe(pos).get_color();
                 if color.is_some() && color.unwrap() == self.turn {
-                    self.add_all_moves_from_pos(pos, &mut result);
+                    self.add_all_moves_from_pos(pos, res);
                 }
             }
         }
-
-        return result;
     }
 
     pub fn get_all_moves_checked(&self) -> Vec<ChessMove> {
@@ -236,7 +238,7 @@ impl ChessBoardState {
         return self.get_pos_attacked(pos, color);
     }
 
-    // when cheking if smth is attacked color always means who is attacked
+    // when checking if smth is attacked, color always means who is attacked
     pub fn check_attacked_direction(
         &self,
         from: Pos,
@@ -697,22 +699,22 @@ impl ChessBoardState {
         if piece == ChessPiece::PawnWhite || piece == ChessPiece::PawnBlack {
             if mv.to.get_code() == self.en_passant {
                 return ChessMove {
-                    mv: mv,
+                    mv,
                     move_type: ChessMoveType::EnPassant,
                 };
             }
             if move_str.len() == 6 {
                 return ChessMove {
-                    mv: mv,
+                    mv,
                     move_type: ChessMoveType::Promotion(ChessPiece::from_u8(
                         *move_str.as_bytes().get(5).unwrap(),
                     )),
                 };
             }
         }
-        return ChessMove {
-            mv: mv,
+        ChessMove {
+            mv,
             move_type: ChessMoveType::Simple,
-        };
+        }
     }
 }
