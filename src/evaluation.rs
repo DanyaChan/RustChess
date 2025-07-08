@@ -68,7 +68,7 @@ impl Evaluator {
             pieces_values: PieceEvaluation::new(),
             castle_value: 0.3,
             pawn_pos_value: [0.0, 0.0, 0.05, 0.1, 0.1, 0.3, 1.0, 0.0],
-            center_pos_value: [-0.05, 0.0, 0.1, 0.2, 0.2, 0.1, 0.0, -0.05],
+            center_pos_value: [0.0, 0.02, 0.1, 0.2, 0.2, 0.1, 0.02, 0.0],
             low_level_eval_called: 0,
         }
     }
@@ -125,17 +125,15 @@ impl Evaluator {
     }
 
     // TODO refactor config in Evaluator 
+    #[warn(dead_code)]
     fn get_depth(_: usize, cur: usize, depth: usize) -> usize {
-        if depth >= 1 && cur < 2 {
+        if depth >= 1 && cur < 6 {
             return depth - 1;
         }
-        if depth >= 2 && cur < 4 {
-            return depth * 4 / 5 - 1;
+        if depth >= 3 {
+            return depth - 3;
         }
-        if depth >= 3 && cur < 6 {
-            return depth * 2 / 3 - 1;
-        }
-        return depth / 2;
+        return (depth + 1) % 2;
     }
 
     fn eval(
@@ -170,7 +168,9 @@ impl Evaluator {
             });
         }
         let mut best_eval = Self::get_base_move(if !max { 10000000.0 } else { -10000000.0 });
-        for (i, mv) in moves_queue.iter().enumerate() {
+        let moves_num = moves_queue.len();
+        for i in 0..moves_num {
+            let mv = moves_queue.pop().unwrap();
             let eval = {
                 let (new_board, res) = board.get_new_pos_after_move_for_eval(mv.mv);
                 if res.remove == ChessPiece::KingBlack || res.remove == ChessPiece::KingWhite {
@@ -237,10 +237,11 @@ impl Evaluator {
         let color = piece.get_color().unwrap();
         let mult = if color == Color::White { 1.0 } else { -1.0 };
         if piece == ChessPiece::PawnWhite {
-            return self.pawn_pos_value[pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 4.0;
+            return self.pawn_pos_value[pos.y as usize] + (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 4.0;
         }
         if piece == ChessPiece::PawnBlack {
-            return -self.pawn_pos_value[7 - pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) / 4.0;
+            return -(self.center_pos_value[pos.x as usize] * self.center_pos_value[pos.y as usize]) * 10.0;
+            // return -self.pawn_pos_value[7 - pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) * 10.0;
         }
         return mult
             * (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize])

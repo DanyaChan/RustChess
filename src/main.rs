@@ -31,7 +31,7 @@ fn main() {
         board = board.get_new_pos_after_move(mv.unwrap());
         board.debug_print();
 
-        let res = eval.evaluate(&board, 8);
+        let res = eval.evaluate(&board, 12);
         println!(
             "Computer move {}; Position analysed {}",
             board.get_move_string(res.1.last().unwrap().0),
