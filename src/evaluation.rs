@@ -36,7 +36,7 @@ struct PieceEvaluation {
     pub king: f32,
     pub queen: f32,
     pub rook: f32,
-    pub knignt: f32,
+    pub knight: f32,
     pub bishop: f32,
     pub pawn: f32,
 }
@@ -55,7 +55,7 @@ impl PieceEvaluation {
             king: 1000.0,
             queen: 9.0,
             rook: 5.0,
-            knignt: 3.0,
+            knight: 3.0,
             bishop: 3.0,
             pawn: 1.0,
         }
@@ -80,8 +80,8 @@ impl Evaluator {
             ChessPiece::PawnWhite => self.pieces_values.pawn,
             ChessPiece::RookBlack => -self.pieces_values.rook,
             ChessPiece::RookWhite => self.pieces_values.rook,
-            ChessPiece::KnightBlack => -self.pieces_values.knignt,
-            ChessPiece::KnightWhite => self.pieces_values.knignt,
+            ChessPiece::KnightBlack => -self.pieces_values.knight,
+            ChessPiece::KnightWhite => self.pieces_values.knight,
             ChessPiece::BishopBlack => -self.pieces_values.bishop,
             ChessPiece::BishopWhite => self.pieces_values.bishop,
             ChessPiece::QueenBlack => -self.pieces_values.queen,
@@ -96,6 +96,7 @@ impl Evaluator {
         board: &ChessBoardState,
         depth: usize,
     ) -> (f32, Vec<(ChessMove, f32)>) {
+        self.low_level_eval_called = 0;
         let cur_eval = self.simple_eval(board);
         let max = board.turn == Color::White;
         let mut branch = vec![Self::get_base_move(0.0); depth];
