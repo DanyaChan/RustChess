@@ -33,8 +33,9 @@ fn main() {
 
         let res = eval.evaluate(&board, 8);
         println!(
-            "Computer move {}",
-            board.get_move_string(res.1.last().unwrap().0)
+            "Computer move {}; Position analysed {}",
+            board.get_move_string(res.1.last().unwrap().0),
+            eval.low_level_eval_called
         );
 
         board = board.get_new_pos_after_move(res.1.last().unwrap().0);
