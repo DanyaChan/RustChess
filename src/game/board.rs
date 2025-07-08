@@ -111,6 +111,23 @@ impl Move {
 }
 
 impl ChessPiece {
+    pub fn get_char(&self) -> char {
+        match *self {
+            ChessPiece::None => '.',
+            ChessPiece::PawnWhite => '♙',
+            ChessPiece::PawnBlack => '♟',
+            ChessPiece::RookWhite => '♖',
+            ChessPiece::RookBlack => '♜',
+            ChessPiece::KnightWhite => '♘',
+            ChessPiece::KnightBlack => '♞',
+            ChessPiece::BishopWhite => '♗',
+            ChessPiece::BishopBlack => '♝',
+            ChessPiece::KingWhite => '♔',
+            ChessPiece::KingBlack => '♚',
+            ChessPiece::QueenWhite => '♕',
+            ChessPiece::QueenBlack => '♛',
+        }
+    }
     pub fn get_u8(&self) -> u8 {
         match *self {
             ChessPiece::None => b'.',
@@ -253,7 +270,7 @@ impl ChessBoardState {
             if i > 0 && i % 8 == 0 {
                 print!(" | {}\n", 9 - i / 8);
             }
-            print!("{} ", self.board[Self::get_display_idx(i)].get_u8() as char)
+            print!("{} ", self.board[Self::get_display_idx(i)].get_char())
         }
         print!(" | 1\n");
         print!("----------------\n");
