@@ -2,7 +2,8 @@ use rust_chess::game::board::*;
 use rust_chess::game::rules::*;
 
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
+use rust_chess::utils::thread_pool::{Task, ThreadPoolWrap};
 
 #[derive(Debug, Clone, Copy)]
 struct EvaluationCandidate {
@@ -18,20 +19,21 @@ impl PartialEq for EvaluationCandidate {
 impl Eq for EvaluationCandidate {}
 impl Ord for EvaluationCandidate {
     fn cmp(&self, other: &Self) -> Ordering {
-        return self.value.partial_cmp(&other.value).unwrap();
+         self.value.partial_cmp(&other.value).unwrap()
     }
 }
 impl PartialOrd for EvaluationCandidate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        return self.value.partial_cmp(&other.value);
+        self.value.partial_cmp(&other.value)
     }
 }
 impl EvaluationCandidate {
     fn new(mv: ChessMove, val: f32) -> Self {
-        EvaluationCandidate { mv: mv, value: val }
+        EvaluationCandidate { mv, value: val }
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct PieceEvaluation {
     pub king: f32,
     pub queen: f32,
@@ -40,6 +42,7 @@ struct PieceEvaluation {
     pub bishop: f32,
     pub pawn: f32,
 }
+#[derive(Debug, Clone, Copy)]
 pub struct Evaluator {
     pieces_values: PieceEvaluation,
     castle_value: f32,
@@ -47,6 +50,35 @@ pub struct Evaluator {
     center_pos_value: [f32; 8],
 
     pub low_level_eval_called: i32,
+}
+#[derive(Debug, Clone, Copy)]
+struct AsyncEvalCandidate {
+    evaluator: Evaluator,
+    mv: ChessMove,
+    max: bool,
+    board: ChessBoardState,
+    cur_eval: f32,
+    depth: usize,
+}
+
+#[derive(Debug, Clone)]
+struct AsyncEvalResult {
+    mv: ChessMove,
+    value: f32,
+    branch: Vec<EvaluationCandidate>
+}
+
+fn async_evaluate_impl(mut data: AsyncEvalCandidate) -> AsyncEvalResult {
+    let ret = data.evaluator.eval_async_branch_impl(data.cur_eval,
+                                                    data.board,
+                                                    data.max,
+                                                    data.depth);
+    println!("{}", data.evaluator.low_level_eval_called);
+    AsyncEvalResult {
+        mv: data.mv,
+        value: ret.0,
+        branch: ret.1,
+    }
 }
 
 impl PieceEvaluation {
@@ -74,7 +106,7 @@ impl Evaluator {
     }
 
     pub fn get_piece_value(&self, piece: ChessPiece) -> f32 {
-        return match piece {
+        match piece {
             ChessPiece::None => 0.0,
             ChessPiece::PawnBlack => -self.pieces_values.pawn,
             ChessPiece::PawnWhite => self.pieces_values.pawn,
@@ -88,7 +120,7 @@ impl Evaluator {
             ChessPiece::QueenWhite => self.pieces_values.queen,
             ChessPiece::KingBlack => -self.pieces_values.king,
             ChessPiece::KingWhite => self.pieces_values.king,
-        };
+        }
     }
 
     pub fn evaluate(
@@ -100,7 +132,7 @@ impl Evaluator {
         let cur_eval = self.simple_eval(board);
         let max = board.turn == Color::White;
         let mut branch = vec![Self::get_base_move(0.0); depth];
-        return (
+        (
             self.eval(
                 cur_eval,
                 -1000000.0,
@@ -111,7 +143,58 @@ impl Evaluator {
                 &mut branch,
             ),
             branch.iter().map(|x| (x.mv, x.value)).collect(), //TODO refactor
-        );
+        )
+    }
+    pub fn evaluate_async(
+        &mut self,
+        board: &ChessBoardState,
+        depth: usize,
+    ) -> (f32, Vec<(ChessMove, f32)>) {
+        self.low_level_eval_called = 0;
+        let cur_eval = self.simple_eval(board);
+        let max = board.turn == Color::White;
+        let tpw = ThreadPoolWrap::new(12);
+        let mut tasks = VecDeque::new();
+        let all_moves = board.get_all_moves();
+
+        for mv in all_moves {
+            let (new_board, res) = board.get_new_pos_after_move_for_eval(mv);
+            let value = if max {
+                cur_eval + self.get_result_eval_diff(&new_board, res, mv)
+            } else {
+                -cur_eval - self.get_result_eval_diff(&new_board, res, mv)
+            };
+            tasks.push_back(Task {
+                data: AsyncEvalCandidate {
+                    evaluator: *self,
+                    cur_eval: value,
+                    mv,
+                    max: !max,
+                    board: new_board,
+                    depth: depth - 1
+                },
+                task: |x| async_evaluate_impl(x)
+            });
+        }
+        tpw.put_tasks_into_queue(tasks);
+        tpw.await_all_tasks();
+        let tasks_res = tpw.get_all_tasks_and_clear();
+        if tasks_res.is_empty() {
+            return (0.0, vec![]);
+        }
+        let mut best_eval_idx = 0;
+        for i in 1..tasks_res.len() {
+            if max && tasks_res[i].value > tasks_res[best_eval_idx].value {
+                best_eval_idx = i;
+            }
+            if !max && tasks_res[i].value < tasks_res[best_eval_idx].value {
+                best_eval_idx = i;
+            }
+        }
+        let best_eval = &tasks_res[best_eval_idx];
+        let mut res_branch: Vec<(ChessMove, f32)> = best_eval.branch.iter().map(|x| (x.mv, x.value)).collect();
+        res_branch.push((best_eval.mv, best_eval.value));
+        (best_eval.value, res_branch)
     }
 
     fn get_base_move(value: f32) -> EvaluationCandidate {
@@ -133,7 +216,26 @@ impl Evaluator {
         if depth >= 3 {
             return depth - 3;
         }
-        return (depth + 1) % 2;
+        (depth + 1) % 2
+    }
+    fn eval_async_branch_impl(
+        &mut self,
+        cur_eval: f32,
+        board: ChessBoardState,
+        max: bool,
+        depth: usize
+    ) -> (f32, Vec<EvaluationCandidate>) {
+        let mut branch = vec![Self::get_base_move(0.0); depth];
+        let res = self.eval(
+            cur_eval,
+            -1000000.0,
+            1000000.0,
+            board,
+            max,
+            depth,
+            &mut branch,
+        );
+        (res, branch)
     }
 
     fn eval(
@@ -163,8 +265,8 @@ impl Evaluator {
                 -cur_eval - self.get_result_eval_diff(&new_board, res, mv)
             };
             moves_queue.push(EvaluationCandidate {
-                mv: mv,
-                value: value,
+                mv,
+                value,
             });
         }
         let mut best_eval = Self::get_base_move(if !max { 10000000.0 } else { -10000000.0 });
@@ -211,7 +313,7 @@ impl Evaluator {
         }
 
         branch[depth - 1] = best_eval;
-        return best_eval.value;
+        best_eval.value
     }
 
     fn get_result_eval_diff(
@@ -230,7 +332,7 @@ impl Evaluator {
         sum += self.get_piece_value_from_pos(piece, mv.mv.to)
             - self.get_piece_value_from_pos(piece, mv.mv.from);
         sum += self.get_piece_value(move_res.new) - self.get_piece_value(move_res.remove);
-        return sum;
+        sum
     }
 
     fn get_piece_value_from_pos(&self, piece: ChessPiece, pos: Pos) -> f32 {
@@ -243,9 +345,9 @@ impl Evaluator {
             return -(self.center_pos_value[pos.x as usize] * self.center_pos_value[pos.y as usize]) * 10.0;
             // return -self.pawn_pos_value[7 - pos.y as usize] - (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize]) * 10.0;
         }
-        return mult
+        mult
             * (self.center_pos_value[pos.x as usize] + self.center_pos_value[pos.y as usize])
-            / 2.0;
+            / 2.0
     }
 
     fn simple_eval(&self, board: &ChessBoardState) -> f32 {
@@ -256,6 +358,30 @@ impl Evaluator {
                 eval += self.get_piece_value(piece);
             }
         }
-        return eval;
+        eval
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use::rust_chess::game::board::*;
+    use super::*;
+    #[test]
+    fn test_eval_plus_time_diff() {
+        let board =
+            ChessBoardState::from_fen("r1b1kbnr/ppp3p1/2n5/1B1qppPp/3P3N/2N1B3/PPP2P1P/R2QK2R b Kq - 0 1")
+                .unwrap();
+        let mut eval = Evaluator::new();
+        {
+            let start = std::time::SystemTime::now();
+            let _ = eval.evaluate(&board, 10);
+            println!("Eval sync time {} {}", eval.low_level_eval_called ,start.elapsed().unwrap().as_millis());
+        }
+        {
+            let start = std::time::SystemTime::now();
+            let _ = eval.evaluate_async(&board, 10);
+            println!("Eval async time {}", start.elapsed().unwrap().as_millis());
+        }
+        assert!(false);
     }
 }

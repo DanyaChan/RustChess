@@ -17,7 +17,7 @@ fn main() {
             let mut input = String::new();
 
             io::stdin().read_line(&mut input).expect("Failed to read line");
-            mv = board.get_chess_move_from_string(&input[0..input.len() - 1]);
+            mv = board.get_chess_move_from_string(&input[0..input.len() - 2]);
 
             if mv.is_none() {
                 println!("Wrong move format");
@@ -31,7 +31,7 @@ fn main() {
         board = board.get_new_pos_after_move(mv.unwrap());
         board.debug_print();
 
-        let res = eval.evaluate(&board, 12);
+        let res = eval.evaluate_async(&board, 8);
         println!(
             "Computer move {}; Position analysed {}",
             board.get_move_string(res.1.last().unwrap().0),
