@@ -141,7 +141,7 @@ mod test {
     }
     #[test]
     fn test_pool() {
-        let twp = ThreadPoolWrap::<i32, (i32, i128)>::new(24);
+        let twp = ThreadPoolWrap::<i32, (i32, i128)>::new(12);
         let mut tasks = VecDeque::<Task::<i32, (i32, i128)>>::new();
         for _ in 0..50 {
             tasks.push_back(Task::<i32, (i32, i128)> {

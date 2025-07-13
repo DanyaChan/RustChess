@@ -157,21 +157,31 @@ impl Evaluator {
         let mut tasks = VecDeque::new();
         let all_moves = board.get_all_moves();
 
+        let mut moves_queue = BinaryHeap::<EvaluationCandidate>::new();
         for mv in all_moves {
-            let (new_board, res) = board.get_new_pos_after_move_for_eval(mv);
+            let (new_board, res) = board.get_new_pos_after_move_for_eval(mv); // TODO optimise even more dont make new board twice
             let value = if max {
                 cur_eval + self.get_result_eval_diff(&new_board, res, mv)
             } else {
                 -cur_eval - self.get_result_eval_diff(&new_board, res, mv)
             };
+            moves_queue.push(EvaluationCandidate {
+                mv,
+                value,
+            });
+        }
+
+        for mv in moves_queue.iter().enumerate() {
+            let (new_board, res) = board.get_new_pos_after_move_for_eval(mv.1.mv);
+            let value = cur_eval + self.get_result_eval_diff(&new_board, res, mv.1.mv);
             tasks.push_back(Task {
                 data: AsyncEvalCandidate {
                     evaluator: *self,
                     cur_eval: value,
-                    mv,
+                    mv: mv.1.mv,
                     max: !max,
                     board: new_board,
-                    depth: depth - 1
+                    depth: Self::get_depth(moves_queue.len(), mv.0, depth)
                 },
                 task: |x| async_evaluate_impl(x)
             });
