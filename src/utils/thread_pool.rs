@@ -14,8 +14,16 @@ struct ThreadPool<Data, Result> {
     tasks_queue: VecDeque<Task<Data, Result>>,
     result_queue: VecDeque<Result>,
     tasks_in_progress: usize,
-    // threads_handles: Vec<JoinHandle<()>>,
+    threads_handles: Vec<JoinHandle<()>>,
     stop: bool
+}
+
+impl<Data, Result> Drop for ThreadPool<Data, Result> {
+    fn drop(&mut self) {
+        for handle in self.threads_handles.drain(0..) {
+            handle.join().unwrap();
+        }
+    }
 }
 
 pub struct ThreadPoolWrap<Data, Result>{
@@ -57,14 +65,15 @@ impl<Data, Result> ThreadPool<Data, Result> where Data: 'static + Send + Clone, 
             tasks_queue: VecDeque::new(),
             result_queue: VecDeque::new(),
             tasks_in_progress: 0,
-            // threads_handles: Vec::new(),
+            threads_handles: Vec::new(),
             stop: false,
         }));
 
-
+        let mut lock = ret.lock().unwrap();
+        let pool = lock.deref_mut();
         for _ in 0..threads {
             let ret_c = ret.clone();
-            spawn(move || thread_run_cycle(ret_c));
+            pool.threads_handles.push(spawn(move || thread_run_cycle(ret_c)));
         }
         ret.clone()
     }
